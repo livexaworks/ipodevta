@@ -24,7 +24,17 @@ const BTN = {
   SETTINGS: "Settings",
   HELP: "Help",
   CHANNEL: "Channel",
+  FEEDBACK: "Feedback",
 };
+
+const SHORT_DESCRIPTION =
+  "IPO fills without the clutter. Clear 👍 / 👎 with GMP and subscription.";
+
+const BOT_DESCRIPTION =
+  "IPODevta removes the clutter from IPO fill decisions.\n\n" +
+  "You get a simple 👍 or 👎 with GMP and subscription numbers, using filters you set.\n\n" +
+  "Tap Feedback anytime to send a note to the team.\n\n" +
+  "Information only - not investment advice. Read the RHP.";
 
 function channelUrl(channelId) {
   const cid = (channelId || "@ipodevta").trim();
@@ -52,41 +62,46 @@ function prefsBlock(p) {
 function welcomeText(p, channelId) {
   const channel = channelUrl(channelId);
   return [
-    "<b>IPO Devta</b>",
-    "<i>Your IPO fill assistant</i>",
+    "<b>IPODevta</b>",
+    "<i>IPO fills without the clutter.</i>",
     "",
-    "On closing days you get a clear 👍 / 👎 view from <b>your</b> filters - so you know what to consider filing.",
+    "On closing days you get:",
+    "• A clear 👍 or 👎 for each issue",
+    "• GMP and subscription in one place",
+    "• Filters you control",
     "",
     prefsBlock(p),
     "",
     RULE,
     "",
-    "Use the buttons below - no typing needed.",
+    "Use the buttons below. No typing needed.",
     "",
-    `Prefer a shared feed? <a href="${channel}">Join the channel</a>`,
+    `Prefer a shared list? <a href="${channel}">Join the channel</a>`,
     "",
-    "<i>No selling. No promotions. Just fill reminders.</i>",
+    "Something off? Tap <b>Feedback</b>.",
+    "",
+    "<i>No selling. No promotions.</i>",
   ].join("\n");
 }
 
 function helpText(channelId) {
   const channel = channelUrl(channelId);
   return [
-    "<b>How it works</b>",
+    "<b>What you get</b>",
     "",
     "<b>Preview GMP</b>",
-    "Last five scored issues with your filters.",
+    "Recent issues with your filters applied.",
     "",
     "<b>Settings</b>",
-    "Tap to set GMP %, subscription, and board.",
+    "Your GMP %, subscription floor, and board.",
     "",
     "<b>Channel</b>",
-    "Public closing-day feed without personal filters.",
+    "Shared closing-day list without personal filters.",
+    "",
+    "<b>Feedback</b>",
+    "Send a short note to the team.",
     "",
     RULE,
-    "",
-    "Weekday morning - personalized DM when issues close",
-    "Weekday evening - book recorded for next day",
     "",
     `<a href="${channel}">Open channel</a>`,
     "",
@@ -100,8 +115,8 @@ function settingsText(p) {
     "",
     prefsBlock(p),
     "",
-    "Tap a value below to update.",
-    "Changes apply to Preview and closing-day DMs right away.",
+    "Tap a value below to change it.",
+    "Your next Preview and closing-day notes use the new values.",
   ].join("\n");
 }
 
@@ -110,12 +125,23 @@ function channelText(channelId) {
   return [
     "<b>Public channel</b>",
     "",
-    "Daily closing-day GMP feed.",
-    "No personal filters - useful if you want reminders without DMs.",
+    "Shared closing-day list.",
+    "No personal filters.",
     "",
     RULE,
     "",
     `<a href="${url}">Join ${url.replace("https://t.me/", "@")}</a>`,
+  ].join("\n");
+}
+
+function feedbackPrompt() {
+  return [
+    "<b>Feedback</b>",
+    "",
+    "Send your note in one message.",
+    "We will forward it to the team.",
+    "",
+    "Type <code>cancel</code> to stop.",
   ].join("\n");
 }
 
@@ -124,6 +150,7 @@ function mainKeyboard() {
     keyboard: [
       [{ text: BTN.PREVIEW }, { text: BTN.SETTINGS }],
       [{ text: BTN.HELP }, { text: BTN.CHANNEL }],
+      [{ text: BTN.FEEDBACK }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -141,6 +168,7 @@ function homeInline(channelId) {
         { text: "Help", callback_data: "help" },
         { text: "Join channel", url: channelUrl(channelId) },
       ],
+      [{ text: "Feedback", callback_data: "feedback" }],
     ],
   };
 }
@@ -186,6 +214,80 @@ async function tg(env, method, body) {
     body: JSON.stringify(body),
   });
   return resp.json();
+}
+
+let profileSynced = false;
+
+async function ensureBotProfile(env) {
+  if (profileSynced) return;
+  const commands = [
+    { command: "start", description: "Open IPODevta" },
+    { command: "preview", description: "See issues with your filters" },
+    { command: "settings", description: "Set GMP, subscription, board" },
+    { command: "help", description: "What you get" },
+    { command: "feedback", description: "Send a note to the team" },
+  ];
+  await tg(env, "setMyCommands", { commands });
+  await tg(env, "setMyShortDescription", {
+    short_description: SHORT_DESCRIPTION.slice(0, 120),
+  });
+  await tg(env, "setMyDescription", {
+    description: BOT_DESCRIPTION.slice(0, 512),
+  });
+  try {
+    await tg(env, "setMyName", { name: "IPODevta" });
+  } catch (_) {
+    // older bots may not support rename via API
+  }
+  profileSynced = true;
+}
+
+async function beginFeedback(env, chatId) {
+  await env.PREFS.put(`feedback:await:${chatId}`, "1", { expirationTtl: 600 });
+  await tg(env, "sendMessage", {
+    chat_id: chatId,
+    text: feedbackPrompt(),
+    parse_mode: "HTML",
+    reply_markup: mainKeyboard(),
+  });
+}
+
+async function handleFeedbackMessage(env, chatId, text) {
+  const awaiting = await env.PREFS.get(`feedback:await:${chatId}`);
+  if (!awaiting) return false;
+
+  const raw = (text || "").trim();
+  if (!raw) return true;
+
+  if (raw.toLowerCase() === "cancel") {
+    await env.PREFS.delete(`feedback:await:${chatId}`);
+    await tg(env, "sendMessage", {
+      chat_id: chatId,
+      text: "Feedback cancelled.",
+      reply_markup: mainKeyboard(),
+    });
+    return true;
+  }
+
+  await env.PREFS.delete(`feedback:await:${chatId}`);
+  const admin = (env.ADMIN_CHAT_ID || "").trim();
+  if (admin) {
+    await tg(env, "sendMessage", {
+      chat_id: admin,
+      text:
+        `<b>Feedback</b> from <code>${esc(String(chatId))}</code>\n` +
+        `${RULE}\n` +
+        esc(raw),
+      parse_mode: "HTML",
+    });
+  }
+  await tg(env, "sendMessage", {
+    chat_id: chatId,
+    text: "Thanks. Your note was sent to the team.",
+    reply_markup: homeInline(env.CHANNEL_ID),
+    parse_mode: "HTML",
+  });
+  return true;
 }
 
 async function getPrefs(env, chatId) {
@@ -432,10 +534,13 @@ async function handleText(env, chatId, text) {
   const raw = (text || "").trim();
   if (!raw) return;
 
+  if (await handleFeedbackMessage(env, chatId, raw)) return;
+
   if (raw === BTN.PREVIEW) return sendPreviewAck(env, chatId);
   if (raw === BTN.SETTINGS) return sendSettings(env, chatId);
   if (raw === BTN.HELP) return sendHelp(env, chatId);
   if (raw === BTN.CHANNEL) return sendChannel(env, chatId);
+  if (raw === BTN.FEEDBACK) return beginFeedback(env, chatId);
 
   const cmd = raw.split(/\s+/)[0].toLowerCase().split("@")[0];
   if (["/start", "/menu", "start", "menu"].includes(cmd)) return sendHome(env, chatId);
@@ -444,10 +549,11 @@ async function handleText(env, chatId, text) {
     return sendSettings(env, chatId);
   if (["/preview", "preview"].includes(cmd)) return sendPreviewAck(env, chatId);
   if (["/channel", "channel"].includes(cmd)) return sendChannel(env, chatId);
+  if (["/feedback", "feedback"].includes(cmd)) return beginFeedback(env, chatId);
 
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text: "Use the buttons below.\nPreview GMP · Settings · Help · Channel",
+    text: "Use the buttons below.\nPreview GMP · Settings · Help · Channel · Feedback",
     reply_markup: mainKeyboard(),
   });
 }
@@ -483,6 +589,10 @@ async function handleCallback(env, cb) {
   }
   if (data === "preview") {
     return sendPreviewAck(env, chatId, cb.id);
+  }
+  if (data === "feedback") {
+    await answer("Feedback");
+    return beginFeedback(env, chatId);
   }
 
   if (data.startsWith("gmp:")) {
@@ -602,6 +712,7 @@ export default {
     }
 
     try {
+      await ensureBotProfile(env);
       if (update.callback_query) {
         await handleCallback(env, update.callback_query);
       } else {

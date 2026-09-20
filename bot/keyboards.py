@@ -12,7 +12,6 @@ def channel_url() -> str:
     if cid.startswith("@"):
         return f"https://t.me/{cid[1:]}"
     if cid.startswith("-"):
-        # numeric channel id - fall back to public username if set in env example
         return "https://t.me/ipodevta"
     return f"https://t.me/{cid}"
 
@@ -23,6 +22,7 @@ def main_reply_keyboard() -> dict[str, Any]:
         "keyboard": [
             [{"text": "Preview GMP"}, {"text": "Settings"}],
             [{"text": "Help"}, {"text": "Channel"}],
+            [{"text": "Feedback"}],
         ],
         "resize_keyboard": True,
         "is_persistent": True,
@@ -40,6 +40,7 @@ def home_inline() -> dict[str, Any]:
                 {"text": "Help", "callback_data": "help"},
                 {"text": "Join channel", "url": channel_url()},
             ],
+            [{"text": "Feedback", "callback_data": "feedback"}],
         ]
     }
 

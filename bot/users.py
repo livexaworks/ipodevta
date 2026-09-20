@@ -18,13 +18,14 @@ BTN_PREVIEW = "Preview GMP"
 BTN_SETTINGS = "Settings"
 BTN_HELP = "Help"
 BTN_CHANNEL = "Channel"
+BTN_FEEDBACK = "Feedback"
 
 BOT_COMMANDS = [
-    {"command": "start", "description": "Open IPO Devta"},
-    {"command": "menu", "description": "Show main buttons"},
-    {"command": "preview", "description": "Last 5 IPOs with your filters"},
-    {"command": "settings", "description": "Adjust GMP / subscription / board"},
-    {"command": "help", "description": "How the assistant works"},
+    {"command": "start", "description": "Open IPODevta"},
+    {"command": "preview", "description": "See issues with your filters"},
+    {"command": "settings", "description": "Set GMP, subscription, board"},
+    {"command": "help", "description": "What you get"},
+    {"command": "feedback", "description": "Send a note to the team"},
 ]
 
 
@@ -72,17 +73,12 @@ def ensure_bot_commands() -> None:
     except Exception as exc:  # noqa: BLE001
         log.warning("setMyCommands failed: %s", exc)
 
-    short = "IPO fill assistant - personalized GMP & subscription filters"
-    about = (
-        "IPO Devta helps you decide what to file on closing days.\n\n"
-        "Personalized 👍 / 👎 views from your GMP, subscription, and board "
-        "filters. Preview the last five processed issues anytime.\n\n"
-        "Prefer a shared feed? Join the public channel. "
-        "Information only - not investment advice."
-    )
+    short = render.SHORT_DESCRIPTION
+    about = render.BOT_DESCRIPTION
     for method, payload in (
         ("setMyShortDescription", {"short_description": short[:120]}),
         ("setMyDescription", {"description": about[:512]}),
+        ("setMyName", {"name": "IPODevta"}),
     ):
         try:
             resp = requests.post(f"{base}/{method}", json=payload, timeout=30)
@@ -198,6 +194,14 @@ def handle_text(
         return live_pool
     if raw == BTN_CHANNEL:
         _send_channel(chat_id, dry_run=dry_run)
+        return live_pool
+    if raw == BTN_FEEDBACK:
+        notify.send_message(
+            chat_id,
+            render.feedback_prompt(),
+            reply_markup=keyboards.main_reply_keyboard(),
+            dry_run=dry_run,
+        )
         return live_pool
 
     parts = raw.split()
