@@ -41,6 +41,7 @@ def send_message(
     text: str,
     *,
     parse_mode: str | None = "HTML",
+    reply_markup: dict[str, Any] | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -50,7 +51,45 @@ def send_message(
     }
     if parse_mode:
         payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
     return _post("sendMessage", payload, dry_run=dry_run)
+
+
+def edit_message(
+    chat_id: str | int,
+    message_id: int,
+    text: str,
+    *,
+    parse_mode: str | None = "HTML",
+    reply_markup: dict[str, Any] | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "disable_web_page_preview": True,
+    }
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    return _post("editMessageText", payload, dry_run=dry_run)
+
+
+def answer_callback(
+    callback_query_id: str,
+    *,
+    text: str | None = None,
+    show_alert: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"callback_query_id": callback_query_id}
+    if text:
+        payload["text"] = text
+        payload["show_alert"] = show_alert
+    return _post("answerCallbackQuery", payload, dry_run=dry_run)
 
 
 def broadcast(html: str, *, dry_run: bool = False) -> dict[str, Any]:

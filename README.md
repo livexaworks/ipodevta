@@ -1,50 +1,64 @@
-# IPO Devta — free IPO screening Telegram bot
+# IPO Devta
 
-Personalized DMs from your own GMP / subscription / MAIN-vs-SME settings, plus a
-public channel with the unfiltered daily GMP feed for issues closing that day.
+A Telegram assistant for IPO fill decisions.
 
-This is **information only**, not investment advice. Verdicts are 👍 / 👎 plus
-the numbers that produced them. Grey-market premium is unofficial and can be
-manipulated. Read the RHP.
+On days when issues close, IPO Devta sends a clear 👍 / 👎 view based on each
+subscriber’s filters — grey-market premium (GMP), subscription, and board —
+so you know what to consider filing. A public channel carries the same-day
+closing list without personal filters.
 
-## Free-tier stack
+This is **information only**, not investment advice. GMP is unofficial and can
+move quickly. Always read the RHP.
 
-- Public GitHub repo + **GitHub Actions** cron (no paid host, no database)
-- State in committed `data/*.json`
-- Telegram Bot API
+---
 
-Scheduled workflows are **disabled by GitHub after 60 days** without repo activity.
-Push a commit or run the workflow manually before that window expires.
+## What you get
 
-## Setup
+| Surface | Purpose |
+|---------|---------|
+| **Bot DM** | Personalized closing-day reminders using *your* filters |
+| **Preview GMP** | Last five processed issues (or live open issues), scored now |
+| **Settings** | Tap buttons to set min GMP %, min subscription, and board |
+| **Channel** | Unfiltered closing-day feed — no account required |
+
+No selling. No promotions. Just timely fill reminders.
+
+---
+
+## Using the bot
+
+1. Open the bot and tap **Start**.
+2. Use the bottom buttons: **Preview GMP**, **Settings**, **Help**, **Channel**.
+3. In **Settings**, tap GMP / subscription / board values — no typing needed.
+4. Optional: join the public channel if you prefer a shared feed over DMs.
+
+Slash shortcuts (`/preview`, `/settings`, `/help`) still work; buttons are the
+primary interface.
+
+---
+
+## Operator setup
 
 1. Copy `.env.example` → `.env` (local only; never commit `.env`).
 2. Create a bot with [@BotFather](https://t.me/BotFather).
 3. Create a public channel; add the bot as admin with **Post Messages**.
-4. Set GitHub Actions secrets: `TELEGRAM_TOKEN`, `CHANNEL_ID`, `ADMIN_CHAT_ID`.
+4. Set repository secrets: `TELEGRAM_TOKEN`, `CHANNEL_ID`, `ADMIN_CHAT_ID`.
 
-## Commands (bot DM)
+### Modes
 
-Telegram shows these under the **/** menu (registered via `setMyCommands`).
-`/start` and `/help` also paste the full guide into the chat.
+```bash
+python -m bot.run --mode commands   # reply to pending DMs / button taps
+python -m bot.run --mode dry-run    # build alert text; still replies to DMs
+python -m bot.run --mode snapshot   # evening book record
+python -m bot.run --mode alert      # morning channel + personalized DMs
+```
 
-| Command | Meaning |
-|---------|---------|
-| `/start` / `/help` | Register + full in-chat manual |
-| `/settings` | Show current prefs |
-| `/gmp 30` | Min GMP % |
-| `/sub 2` | Min total subscription (x) |
-| `/board main` or `/board all` | MAIN only vs MAIN+SME |
-| `/status` | Same as settings |
+Scheduled jobs (weekdays, IST): morning alert, evening snapshot, and periodic
+command/button processing.
 
-The bot is not always-on. Command replies are processed about **hourly on
-weekdays** (plus the alert/snapshot jobs). After DMing `/start`, run Actions
-manually with mode **`commands`** if you want the confirmation immediately.
+### Local discovery (BSE field names)
 
-## Local discovery (BSE field names)
-
-BSE renames JSON keys between issues. Parsers in `bot/sources/bse.py` were written
-against live fixtures under `fixtures/` (Sep 2026). Re-run if BSE breaks:
+BSE occasionally renames JSON keys. Re-run against live fixtures if parsers break:
 
 ```bash
 python -m venv .venv
@@ -53,35 +67,24 @@ pip install -r requirements.txt
 python -m bot.discover
 ```
 
-## Modes
-
-```bash
-python -m bot.run --mode commands   # reply to pending DMs only
-python -m bot.run --mode dry-run    # build alert text; still replies to DMs
-python -m bot.run --mode snapshot   # 17:15 IST — record only
-python -m bot.run --mode alert      # 10:55 IST — channel + personalized DMs
-```
-
-Alert posts **one channel message** (all closing IPOs, unfiltered GMP feed) and
-**one DM per registered user** (scored with their prefs). No post if nothing
-closes that day.
-
-## Tests
+### Tests
 
 ```bash
 python -m pytest
 ```
 
+---
+
 ## Privacy
 
-`data/users.json` is committed on a **public** repo. It stores Telegram `chat_id`
-and numeric prefs only — no names or phone numbers. Start the bot only if you
-accept that.
+`data/users.json` may be stored with the project. It holds Telegram `chat_id`
+and numeric filter prefs only — no names or phone numbers.
 
-## Notes on GMP sites
+## Data sources
 
-- **IPO Watch** — HTML tables (primary).
-- **IPO Central** — list tables are often empty shells; scraper falls back to the
-  live GMP ticker markup on `ipo-discussion`.
-- **InvestorGain** — page is JS-rendered; may fail until they expose static HTML
-  again. Alert mode still runs if **≥2** other sources succeed.
+- **BSE** — live issue book and category demand
+- **IPO Watch** — primary GMP table
+- **IPO Central** — GMP ticker fallback
+- **Investorgain** — additional GMP source when available
+
+Alert delivery continues when at least two GMP sources succeed.
