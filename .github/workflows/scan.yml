@@ -1,0 +1,53 @@
+name: IPO scan
+on:
+  schedule:
+    - cron: "55 5 * * 1-5"    # 10:55 IST, alert mode
+    - cron: "45 11 * * 1-5"   # 17:15 IST, snapshot mode
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [snapshot, alert, dry-run]
+        default: dry-run
+
+concurrency:
+  group: ipo-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Pick mode
+        id: m
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "55 5 * * 1-5" ]; then
+            echo "mode=alert" >> $GITHUB_OUTPUT
+          else
+            echo "mode=snapshot" >> $GITHUB_OUTPUT
+          fi
+      - run: python -m bot.run --mode ${{ steps.m.outputs.mode }}
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHANNEL_ID:     ${{ secrets.CHANNEL_ID }}
+          ADMIN_CHAT_ID:  ${{ secrets.ADMIN_CHAT_ID }}
+      - name: Commit state
+        if: always()
+        run: |
+          git config user.name  "ipo-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "state: $(date -u +%F_%H%M)"
+          git push
