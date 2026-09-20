@@ -69,49 +69,53 @@ def build_preview(
     prefs: dict[str, Any],
     *,
     limit: int = 5,
+    live_pool: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]]]:
     """
     Return (source_label, items) where items match render.render_dm shape:
     (ipo, ok, reasons, prev, live).
+
+    Pass live_pool to reuse one live fetch across many Preview taps in a drain.
     """
     snaps = state.load_snapshots()
     recent = _latest_unique_snapshots(limit)
-    source = "processed"
 
-    if not recent:
-        recent = _live_fallback(limit)
-        source = "live"
-        items: list[
-            tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]
-        ] = []
-        for ipo in recent:
-            # No prior-day history yet — use live book as context for preview only
+    if recent:
+        items = []
+        for row in recent:
+            ipo_id = row.get("ipo_id") or ""
+            hist = _history_for(snaps, ipo_id)
+            as_of = row.get("date") or ""
+            prev = _prev_close(hist, as_of)
+            ipo_view = {**row, "history": hist}
             live = {
-                "sub_total": ipo.get("sub_total"),
-                "sub_qib": ipo.get("sub_qib"),
-                "sub_nii": ipo.get("sub_nii"),
-                "sub_retail": ipo.get("sub_retail"),
-                "board": ipo.get("board"),
+                "sub_total": row.get("sub_total"),
+                "sub_qib": row.get("sub_qib"),
+                "sub_nii": row.get("sub_nii"),
+                "sub_retail": row.get("sub_retail"),
+                "board": row.get("board"),
             }
-            # Treat current book as "prev" so GMP filters are visible while history builds
-            ok, reasons = score.evaluate(ipo, live, live, [], prefs=prefs)
-            items.append((ipo, ok, reasons, live, live))
-        return source, items
+            ok, reasons = score.evaluate(ipo_view, live, prev, hist, prefs=prefs)
+            items.append((ipo_view, ok, reasons, prev, live))
+        return "processed", items
 
+    if live_pool is None:
+        live_pool = _live_fallback(limit)
+    recent = live_pool[:limit]
     items = []
-    for row in recent:
-        ipo_id = row.get("ipo_id") or ""
-        hist = _history_for(snaps, ipo_id)
-        as_of = row.get("date") or ""
-        prev = _prev_close(hist, as_of)
-        ipo_view = {**row, "history": hist}
+    for ipo in recent:
         live = {
-            "sub_total": row.get("sub_total"),
-            "sub_qib": row.get("sub_qib"),
-            "sub_nii": row.get("sub_nii"),
-            "sub_retail": row.get("sub_retail"),
-            "board": row.get("board"),
+            "sub_total": ipo.get("sub_total"),
+            "sub_qib": ipo.get("sub_qib"),
+            "sub_nii": ipo.get("sub_nii"),
+            "sub_retail": ipo.get("sub_retail"),
+            "board": ipo.get("board"),
         }
-        ok, reasons = score.evaluate(ipo_view, live, prev, hist, prefs=prefs)
-        items.append((ipo_view, ok, reasons, prev, live))
-    return source, items
+        ok, reasons = score.evaluate(ipo, live, live, [], prefs=prefs)
+        items.append((ipo, ok, reasons, live, live))
+    return "live", items
+
+
+def load_live_preview_pool(limit: int = 5) -> list[dict[str, Any]]:
+    """Fetch once per drain — shared across many Preview button taps."""
+    return _live_fallback(limit)

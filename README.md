@@ -53,8 +53,8 @@ python -m bot.run --mode snapshot   # evening book record
 python -m bot.run --mode alert      # morning channel + personalized DMs
 ```
 
-Scheduled jobs (weekdays, IST): morning alert, evening snapshot, and periodic
-command/button processing.
+Scheduled jobs (IST): weekday morning alert, weekday evening snapshot, and
+command/button processing about every **20 minutes** (including weekends).
 
 ### Local discovery (BSE field names)
 
