@@ -142,7 +142,7 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
             log.error("preview mode requires PREVIEW_CHAT_ID")
             return 1
         prefs = state.get_or_create_user(chat_id)
-        from bot import preview, keyboards
+        from bot import keyboards, preview, preview_cache
 
         source, items = preview.build_preview(prefs, limit=5)
         text = render.render_preview(prefs, source, items)
@@ -154,6 +154,8 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
             reply_markup=keyboards.home_inline(),
             dry_run=False,
         )
+        if preview_cache.publish_user_preview(chat_id, text, prefs, source=source):
+            log.info("Preview cache published for %s", chat_id)
         log.info("Preview sent to %s (%s, %d items)", chat_id, source, len(items))
         return 0
 

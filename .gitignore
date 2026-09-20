@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 raw_*.json
 .pytest_cache/
+workers/telegram/.wrangler/

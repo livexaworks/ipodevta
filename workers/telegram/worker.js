@@ -16,6 +16,7 @@ const DEFAULTS = {
 };
 
 const PREVIEW_COOLDOWN_SEC = 60;
+const PREVIEW_CACHE_TTL_SEC = 45 * 60; // serve saved preview for 45 minutes
 const RULE = "────────────";
 
 const BTN = {
@@ -287,6 +288,43 @@ async function sendChannel(env, chatId) {
   });
 }
 
+function prefsFingerprint(p) {
+  return {
+    min_gmp_pct: Number(p.min_gmp_pct),
+    min_total_sub: Number(p.min_total_sub),
+    include_sme: !!p.include_sme,
+  };
+}
+
+function prefsEqual(a, b) {
+  if (!a || !b) return false;
+  return (
+    Number(a.min_gmp_pct) === Number(b.min_gmp_pct) &&
+    Number(a.min_total_sub) === Number(b.min_total_sub) &&
+    !!a.include_sme === !!b.include_sme
+  );
+}
+
+async function getPreviewCache(env, chatId) {
+  const raw = await env.PREFS.get(`preview:msg:${chatId}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function savePreviewCache(env, chatId, payload) {
+  await env.PREFS.put(`preview:msg:${chatId}`, JSON.stringify(payload), {
+    expirationTtl: PREVIEW_CACHE_TTL_SEC,
+  });
+}
+
+async function clearPreviewCache(env, chatId) {
+  await env.PREFS.delete(`preview:msg:${chatId}`);
+}
+
 async function previewLocked(env, chatId) {
   const key = `cooldown:preview:${chatId}`;
   return Boolean(await env.PREFS.get(key));
@@ -299,8 +337,43 @@ async function lockPreview(env, chatId) {
   });
 }
 
+async function sendCachedPreview(env, chatId, cached) {
+  const ageMin = Math.max(
+    1,
+    Math.round((Date.now() - Number(cached.ts || Date.now())) / 60000)
+  );
+  const header =
+    `<b>Saved preview</b>\n` +
+    `<i>Retrieved from cache · about ${ageMin} min old</i>\n` +
+    `${RULE}\n\n`;
+  let body = cached.text || "";
+  // Avoid duplicating if already a full message
+  const text = header + body;
+  const finalText = text.length > 4000 ? text.slice(0, 3900) + "\n\n…truncated." : text;
+  await tg(env, "sendMessage", {
+    chat_id: chatId,
+    text: finalText,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: homeInline(env.CHANNEL_ID),
+  });
+}
+
 async function sendPreviewAck(env, chatId, callbackQueryId) {
-  await getPrefs(env, chatId);
+  const prefs = await getPrefs(env, chatId);
+  const fp = prefsFingerprint(prefs);
+  const cached = await getPreviewCache(env, chatId);
+
+  if (cached && prefsEqual(cached.prefs, fp) && cached.text) {
+    if (callbackQueryId) {
+      await tg(env, "answerCallbackQuery", {
+        callback_query_id: callbackQueryId,
+        text: "Showing saved preview",
+      });
+    }
+    await sendCachedPreview(env, chatId, cached);
+    return;
+  }
 
   if (await previewLocked(env, chatId)) {
     const waitMsg =
@@ -328,7 +401,7 @@ async function sendPreviewAck(env, chatId, callbackQueryId) {
   if (callbackQueryId) {
     await tg(env, "answerCallbackQuery", {
       callback_query_id: callbackQueryId,
-      text: ok ? "Preview started" : "Preview unavailable",
+      text: ok ? "Fetching fresh preview…" : "Preview unavailable",
     });
   }
   await tg(env, "sendMessage", {
@@ -337,12 +410,12 @@ async function sendPreviewAck(env, chatId, callbackQueryId) {
       ? [
           "<b>Preview GMP</b>",
           "",
-          "Fetching scores with your filters…",
+          "Fetching fresh scores with your filters…",
           "",
           RULE,
           "",
           "<i>Usually under 1 minute.</i>",
-          "Please don’t tap Preview again until it arrives.",
+          "After it arrives, you can open it again instantly from the saved copy.",
         ].join("\n")
       : [
           "<b>Preview GMP</b>",
@@ -417,6 +490,7 @@ async function handleCallback(env, cb) {
     const prefs = await getPrefs(env, chatId);
     prefs.min_gmp_pct = val;
     await savePrefs(env, chatId, prefs);
+    await clearPreviewCache(env, chatId);
     await answer(`Min GMP → ${val}%`);
     return sendSettings(env, chatId, messageId);
   }
@@ -425,6 +499,7 @@ async function handleCallback(env, cb) {
     const prefs = await getPrefs(env, chatId);
     prefs.min_total_sub = val;
     await savePrefs(env, chatId, prefs);
+    await clearPreviewCache(env, chatId);
     await answer(`Min sub → ${val}x`);
     return sendSettings(env, chatId, messageId);
   }
@@ -433,6 +508,7 @@ async function handleCallback(env, cb) {
     const prefs = await getPrefs(env, chatId);
     prefs.include_sme = include;
     await savePrefs(env, chatId, prefs);
+    await clearPreviewCache(env, chatId);
     await answer(include ? "MAIN + SME" : "MAIN only");
     return sendSettings(env, chatId, messageId);
   }
@@ -484,6 +560,28 @@ export default {
       }
       await env.PREFS.put("users:index", JSON.stringify(idx));
       return Response.json({ ok: true, users: idx.length });
+    }
+
+    if (request.method === "POST" && url.pathname === "/cache/preview") {
+      const auth = request.headers.get("authorization") || "";
+      const expected = `Bearer ${env.EXPORT_SECRET || ""}`;
+      if (!env.EXPORT_SECRET || auth !== expected) {
+        return new Response("unauthorized", { status: 401 });
+      }
+      const body = await request.json();
+      const chatId = String(body.chat_id || "");
+      const text = body.text || "";
+      if (!chatId || !text) {
+        return new Response("chat_id and text required", { status: 400 });
+      }
+      await savePreviewCache(env, chatId, {
+        text,
+        prefs: body.prefs || {},
+        source: body.source || "",
+        saved_at: body.saved_at || new Date().toISOString(),
+        ts: Date.now(),
+      });
+      return Response.json({ ok: true });
     }
 
     if (request.method !== "POST" || url.pathname !== "/telegram") {

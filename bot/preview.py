@@ -47,6 +47,16 @@ def _latest_unique_snapshots(limit: int) -> list[dict[str, Any]]:
 
 def _live_fallback(limit: int) -> list[dict[str, Any]]:
     """When no snapshots exist yet, score currently open issues."""
+    cached = None
+    try:
+        from bot import preview_cache
+
+        cached = preview_cache.load_cached_live_pool(limit)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("preview pool cache read failed: %s", exc)
+    if cached is not None:
+        return cached
+
     try:
         live_ipos = bse.load_live_ipos()
     except Exception as exc:  # noqa: BLE001
@@ -60,9 +70,15 @@ def _live_fallback(limit: int) -> list[dict[str, Any]]:
         cons = gmp.consolidate(ipo.get("gmp_quotes") or [], ipo.get("price_high"))
         if cons:
             ipo.update(cons)
-    # Prefer issues closing soonest
     enriched.sort(key=lambda r: (r.get("close_date") or "9999", r.get("name") or ""))
-    return enriched[:limit]
+    pool = enriched[: max(limit, 5)]
+    try:
+        from bot import preview_cache
+
+        preview_cache.save_live_pool(pool)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("preview pool cache write failed: %s", exc)
+    return pool[:limit]
 
 
 def build_preview(
