@@ -215,12 +215,12 @@ def render_preview(
         RULE,
     ]
     if ups:
-        parts.extend(["", f"<b>Looks good · {len(ups)}</b>", ""])
+        parts.extend(["", f"<b>Fits your filters · {len(ups)}</b>", ""])
         for ipo, _ok, _reasons, prev, live in ups:
             parts.append(render_thumb_up(ipo, prev=prev, live=live))
             parts.extend(["", RULE, ""])
     if downs:
-        parts.extend([f"<b>Better to skip · {len(downs)}</b>", ""])
+        parts.extend([f"<b>Outside your filters · {len(downs)}</b>", ""])
         for i, (ipo, _ok, reasons, _prev, _live) in enumerate(downs):
             parts.append(render_thumb_down(ipo, reasons))
             if i < len(downs) - 1:
@@ -270,7 +270,7 @@ def render_thumb_up(
     close = ipo.get("close_date")
     if close:
         lines.append(f"Closes       {esc(_date_heading(str(close)))}")
-    lines.extend(["", "<b>This looks good · thumbs up</b>"])
+    lines.extend(["", "<b>Fits your filters · 👍</b>"])
     return "\n".join(lines)
 
 
@@ -286,7 +286,7 @@ def render_thumb_down(ipo: dict[str, Any], reasons: list[str]) -> str:
         "Why skip",
         f"<i>{esc(reason)}</i>",
         "",
-        "<b>Better to skip · thumbs down</b>",
+        "<b>Outside your filters · 👎</b>",
     ]
     return "\n".join(lines)
 
@@ -306,12 +306,12 @@ def render_dm(
         RULE,
     ]
     if ups:
-        parts.extend(["", f"<b>Looks good · {len(ups)}</b>", ""])
+        parts.extend(["", f"<b>Fits your filters · {len(ups)}</b>", ""])
         for ipo, _ok, _reasons, prev, live in ups:
             parts.append(render_thumb_up(ipo, prev=prev, live=live))
             parts.extend(["", RULE, ""])
     if downs:
-        parts.extend([f"<b>Better to skip · {len(downs)}</b>", ""])
+        parts.extend([f"<b>Outside your filters · {len(downs)}</b>", ""])
         for i, (ipo, _ok, reasons, _prev, _live) in enumerate(downs):
             parts.append(render_thumb_down(ipo, reasons))
             if i < len(downs) - 1:
