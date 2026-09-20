@@ -1,4 +1,4 @@
-"""Read/write data/*.json — snapshots, sent log, user prefs."""
+"""Read/write data/*.json - snapshots, sent log, user prefs."""
 
 from __future__ import annotations
 
@@ -111,6 +111,21 @@ def mark_user_sent(date: str, chat_id: str | int, ipo_ids: list[str]) -> None:
 
 
 def load_users() -> dict[str, Any]:
+    """Prefer live webhook prefs (instant Settings), else data/users.json."""
+    try:
+        from bot import webhook_users
+
+        remote = webhook_users.fetch_users()
+        if remote is not None:
+            # Keep a local mirror so the repo still has a backup after alerts
+            try:
+                save_users(remote)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("could not mirror webhook users locally: %s", exc)
+            return remote
+    except Exception as exc:  # noqa: BLE001
+        log.warning("webhook user load skipped: %s", exc)
+
     data = _read(config.USERS_PATH, {})
     if not isinstance(data, dict):
         raise ValueError("users.json must be an object")

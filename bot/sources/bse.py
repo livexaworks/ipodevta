@@ -99,7 +99,7 @@ def map_board(platform: Any) -> str | None:
         return "MAIN"
     if p == "sme":
         return "SME"
-    return None  # Debt / unknown — not equity IPO boards we screen
+    return None  # Debt / unknown - not equity IPO boards we screen
 
 
 def parse_live(payload: Any) -> list[dict[str, Any]]:

@@ -95,6 +95,39 @@ def admin_chat_id() -> str:
     return os.environ.get("ADMIN_CHAT_ID", "").strip()
 
 
+def webhook_base_url() -> str:
+    load_dotenv()
+    return os.environ.get("WEBHOOK_BASE_URL", "").strip()
+
+
+def webhook_secret() -> str:
+    load_dotenv()
+    return os.environ.get("WEBHOOK_SECRET", "").strip()
+
+
+def webhook_export_url() -> str:
+    load_dotenv()
+    explicit = os.environ.get("WEBHOOK_EXPORT_URL", "").strip()
+    if explicit:
+        return explicit
+    base = webhook_base_url().rstrip("/")
+    return f"{base}/export/users" if base else ""
+
+
+def webhook_export_secret() -> str:
+    load_dotenv()
+    return os.environ.get("EXPORT_SECRET", "").strip()
+
+
+def webhook_mode() -> bool:
+    """True when instant webhook replies are configured (skip Actions polling)."""
+    load_dotenv()
+    flag = os.environ.get("TELEGRAM_WEBHOOK", "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        return True
+    return bool(webhook_base_url())
+
+
 def now_ist() -> datetime:
     return datetime.now(IST)
 

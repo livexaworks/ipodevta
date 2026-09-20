@@ -10,7 +10,7 @@ from bot import keyboards, score as score_mod
 
 DISCLAIMER = (
     "Grey-market premium is unofficial and can move quickly.\n"
-    "This is information only — not investment advice. Read the RHP.\n"
+    "This is information only - not investment advice. Read the RHP.\n"
     "Sources: BSE · IPO Watch · IPO Central · Investorgain"
 )
 
@@ -100,7 +100,7 @@ def welcome_text(prefs: dict[str, Any]) -> str:
         "<b>IPO Devta</b>\n"
         "Your IPO fill assistant.\n\n"
         "On closing days you receive a clear 👍 / 👎 view based on "
-        "<b>your</b> filters — GMP, subscription, and board — so you know "
+        "<b>your</b> filters - GMP, subscription, and board - so you know "
         "what to consider filing.\n\n"
         "Use the buttons below. No typing required.\n\n"
         f"<b>Your filters</b>\n{html.escape(prefs_summary(prefs), quote=False)}\n\n"
@@ -114,10 +114,10 @@ def help_text() -> str:
     channel = keyboards.channel_url()
     return (
         "<b>How IPO Devta works</b>\n\n"
-        "• <b>Preview GMP</b> — last five processed issues, scored with your filters "
+        "• <b>Preview GMP</b> - last five processed issues, scored with your filters "
         "(or a live look at open issues if history is still building).\n"
-        "• <b>Settings</b> — tap to set min GMP %, min subscription, and board.\n"
-        "• <b>Channel</b> — public closing-day feed if you prefer not to use DMs.\n\n"
+        "• <b>Settings</b> - tap to set min GMP %, min subscription, and board.\n"
+        "• <b>Channel</b> - public closing-day feed if you prefer not to use DMs.\n\n"
         "Weekday mornings: when issues close that day, you get a personalized DM.\n"
         "Weekday evenings: we record the book for the next morning’s decision.\n\n"
         f"Channel: {esc(channel)}\n\n"
@@ -142,12 +142,12 @@ def render_preview(
     if source == "live":
         heading = "Preview · open issues (live)"
         note = (
-            "Snapshot history is still building — showing live open issues "
+            "Snapshot history is still building - showing live open issues "
             "scored with your filters."
         )
     else:
         heading = "Preview · last 5 processed"
-        note = "Scored with your current filters — the same logic used on closing-day DMs."
+        note = "Scored with your current filters - the same logic used on closing-day DMs."
 
     if not items:
         return (
@@ -239,7 +239,7 @@ def render_dm(
 
 
 def render_channel(date_iso: str, ipos: list[dict[str, Any]]) -> str:
-    """Unfiltered daily GMP feed — all closing IPOs, no personal gates."""
+    """Unfiltered daily GMP feed - all closing IPOs, no personal gates."""
     parts = [f"📋 <b>Closing today · {esc(_date_heading(date_iso))}</b>", ""]
     for ipo in ipos:
         name = _short_name(ipo.get("name") or "?")

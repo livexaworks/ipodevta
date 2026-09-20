@@ -41,7 +41,7 @@ def _parse_number(val: Any) -> float | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
     text = str(val).strip()
-    if not text or text.lower() in ("nan", "na", "n/a", "-", "—", ""):
+    if not text or text.lower() in ("nan", "na", "n/a", "-", "\u2014", "\u2013", ""):
         return None
     # GMP often like "+88", "88", "₹88", "88-90"
     text = text.replace("₹", "").replace(",", "").replace("%", "")

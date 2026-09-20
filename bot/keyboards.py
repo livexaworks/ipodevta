@@ -12,13 +12,13 @@ def channel_url() -> str:
     if cid.startswith("@"):
         return f"https://t.me/{cid[1:]}"
     if cid.startswith("-"):
-        # numeric channel id — fall back to public username if set in env example
+        # numeric channel id - fall back to public username if set in env example
         return "https://t.me/ipodevta"
     return f"https://t.me/{cid}"
 
 
 def main_reply_keyboard() -> dict[str, Any]:
-    """Persistent bottom keyboard — no typing required."""
+    """Persistent bottom keyboard - no typing required."""
     return {
         "keyboard": [
             [{"text": "Preview GMP"}, {"text": "Settings"}],

@@ -43,7 +43,7 @@ def canon(name: Any) -> str:
     if filtered:
         out = " ".join(filtered)
     else:
-        # e.g. "NSE IPO" — do not collapse to empty
+        # e.g. "NSE IPO" - do not collapse to empty
         out = " ".join(words)
     return ALIASES.get(out, out)
 

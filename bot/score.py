@@ -1,4 +1,4 @@
-"""Gates and verdict — previous-day subscription, never live 11:00 QIB."""
+"""Gates and verdict - previous-day subscription, never live 11:00 QIB."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def evaluate(
     """
     Return (thumbs_up, reasons).
     Gates use prev_close subscription and consolidated GMP on `ipo`.
-    `live` is context only — never gated on.
+    `live` is context only - never gated on.
     """
     p = prefs or {}
     min_gmp = float(p.get("min_gmp_pct", MIN_GMP_PCT))

@@ -1,4 +1,4 @@
-"""NSE upcoming issues — optional fallback; failure must not break the run."""
+"""NSE upcoming issues - optional fallback; failure must not break the run."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def fetch_upcoming() -> list[dict[str, Any]]:
             timeout=20,
         )
         if resp.status_code != 200:
-            log.warning("NSE upcoming HTTP %s — skipping", resp.status_code)
+            log.warning("NSE upcoming HTTP %s - skipping", resp.status_code)
             return []
         data = resp.json()
         if isinstance(data, list):
