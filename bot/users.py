@@ -1,4 +1,4 @@
-"""Drain Telegram getUpdates and apply /start + customize commands."""
+"""Drain Telegram updates — button-first UX with optional slash shortcuts."""
 
 from __future__ import annotations
 
@@ -7,42 +7,24 @@ from typing import Any
 
 import requests
 
-from bot import config, notify, state
+from bot import config, keyboards, notify, preview, render, state
 
 log = logging.getLogger(__name__)
 
 OFFSET_PATH = config.DATA_DIR / "telegram_offset.json"
 
-HELP = (
-    "IPO Devta — personalized IPO screening.\n"
-    "Information only, not investment advice.\n\n"
-    "How it works\n"
-    "• Weekday mornings: if IPOs close that day, you get a DM "
-    "scored with YOUR prefs (👍/👎 + numbers).\n"
-    "• Public channel: unfiltered GMP feed for the same day.\n"
-    "• Grey-market premium is unofficial and can be manipulated. Read the RHP.\n\n"
-    "Commands (tap / or type them)\n"
-    "/start — register + show this guide\n"
-    "/help — show this guide again\n"
-    "/settings — show your current prefs\n"
-    "/status — same as /settings\n"
-    "/gmp 30 — set min GMP % (example: 30)\n"
-    "/sub 2 — set min total subscription in times (example: 2x)\n"
-    "/board main — MAIN board only\n"
-    "/board all — MAIN + SME\n\n"
-    "Replies usually arrive within about an hour on weekdays "
-    "(free GitHub Actions — not an always-on server). "
-    "After you send a command, wait for the confirmation DM before changing it again."
-)
+# Reply-keyboard labels (exact match)
+BTN_PREVIEW = "Preview GMP"
+BTN_SETTINGS = "Settings"
+BTN_HELP = "Help"
+BTN_CHANNEL = "Channel"
 
 BOT_COMMANDS = [
-    {"command": "start", "description": "Register and show the guide"},
-    {"command": "help", "description": "Show commands and how alerts work"},
-    {"command": "settings", "description": "Show your current prefs"},
-    {"command": "status", "description": "Same as /settings"},
-    {"command": "gmp", "description": "Set min GMP %, e.g. /gmp 30"},
-    {"command": "sub", "description": "Set min total sub, e.g. /sub 2"},
-    {"command": "board", "description": "MAIN only or MAIN+SME: /board main|all"},
+    {"command": "start", "description": "Open IPO Devta"},
+    {"command": "menu", "description": "Show main buttons"},
+    {"command": "preview", "description": "Last 5 IPOs with your filters"},
+    {"command": "settings", "description": "Adjust GMP / subscription / board"},
+    {"command": "help", "description": "How the assistant works"},
 ]
 
 
@@ -78,28 +60,113 @@ def _api(method: str, **params: Any) -> dict[str, Any]:
 
 
 def ensure_bot_commands() -> None:
-    """Register the / menu so users see every command in Telegram."""
     token = config.telegram_token()
     if not token:
         return
+    base = f"https://api.telegram.org/bot{token}"
     try:
-        url = f"https://api.telegram.org/bot{token}/setMyCommands"
-        resp = requests.post(url, json={"commands": BOT_COMMANDS}, timeout=30)
+        resp = requests.post(f"{base}/setMyCommands", json={"commands": BOT_COMMANDS}, timeout=30)
         data = resp.json()
         if not data.get("ok"):
             log.warning("setMyCommands failed: %s", data)
     except Exception as exc:  # noqa: BLE001
         log.warning("setMyCommands failed: %s", exc)
 
+    short = "IPO fill assistant — personalized GMP & subscription filters"
+    about = (
+        "IPO Devta helps you decide what to file on closing days.\n\n"
+        "Personalized 👍 / 👎 views from your GMP, subscription, and board "
+        "filters. Preview the last five processed issues anytime.\n\n"
+        "Prefer a shared feed? Join the public channel. "
+        "Information only — not investment advice."
+    )
+    for method, payload in (
+        ("setMyShortDescription", {"short_description": short[:120]}),
+        ("setMyDescription", {"description": about[:512]}),
+    ):
+        try:
+            resp = requests.post(f"{base}/{method}", json=payload, timeout=30)
+            data = resp.json()
+            if not data.get("ok"):
+                log.warning("%s failed: %s", method, data)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("%s failed: %s", method, exc)
 
-def _prefs_text(prefs: dict[str, Any]) -> str:
-    board = "MAIN + SME" if prefs.get("include_sme") else "MAIN only"
-    return (
-        f"Your prefs:\n"
-        f"  min GMP %: {prefs.get('min_gmp_pct')}\n"
-        f"  min total sub: {prefs.get('min_total_sub')}x\n"
-        f"  board: {board}\n"
-        f"Updated: {prefs.get('updated', 'n/a')}"
+
+def _send_home(chat_id: int | str, *, dry_run: bool) -> None:
+    prefs = state.get_or_create_user(chat_id)
+    notify.send_message(
+        chat_id,
+        render.welcome_text(prefs),
+        reply_markup=keyboards.main_reply_keyboard(),
+        dry_run=dry_run,
+    )
+    notify.send_message(
+        chat_id,
+        "Quick actions:",
+        reply_markup=keyboards.home_inline(),
+        dry_run=dry_run,
+    )
+
+
+def _send_help(chat_id: int | str, *, dry_run: bool) -> None:
+    notify.send_message(
+        chat_id,
+        render.help_text(),
+        reply_markup=keyboards.home_inline(),
+        dry_run=dry_run,
+    )
+
+
+def _send_settings(
+    chat_id: int | str,
+    *,
+    dry_run: bool,
+    message_id: int | None = None,
+) -> None:
+    prefs = state.get_or_create_user(chat_id)
+    text = render.settings_text(prefs)
+    markup = keyboards.settings_inline(prefs)
+    if message_id is not None:
+        try:
+            notify.edit_message(
+                chat_id, message_id, text, reply_markup=markup, dry_run=dry_run
+            )
+            return
+        except notify.NotifyError as exc:
+            log.info("edit_message fallback to send: %s", exc)
+    notify.send_message(chat_id, text, reply_markup=markup, dry_run=dry_run)
+
+
+def _send_preview(chat_id: int | str, *, dry_run: bool) -> None:
+    prefs = state.get_or_create_user(chat_id)
+    source, items = preview.build_preview(prefs, limit=5)
+    text = render.render_preview(prefs, source, items)
+    # Telegram hard limit ~4096; trim if needed
+    if len(text) > 4000:
+        text = text[:3900] + "\n\n…truncated."
+    notify.send_message(
+        chat_id,
+        text,
+        reply_markup=keyboards.home_inline(),
+        dry_run=dry_run,
+    )
+
+
+def _send_channel(chat_id: int | str, *, dry_run: bool) -> None:
+    url = keyboards.channel_url()
+    notify.send_message(
+        chat_id,
+        (
+            "<b>Public channel</b>\n\n"
+            "Daily closing-day GMP feed — no personal filters.\n"
+            "Useful if you want reminders without DMs.\n\n"
+            f'<a href="{url}">Join {url.replace("https://t.me/", "@")}</a>'
+        ),
+        reply_markup={
+            "inline_keyboard": [[{"text": "Join channel", "url": url}]]
+        },
+        dry_run=dry_run,
     )
 
 
@@ -107,88 +174,167 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
     raw = (text or "").strip()
     if not raw:
         return
+
+    # Reply-keyboard buttons (exact labels)
+    if raw == BTN_PREVIEW:
+        _send_preview(chat_id, dry_run=dry_run)
+        return
+    if raw == BTN_SETTINGS:
+        _send_settings(chat_id, dry_run=dry_run)
+        return
+    if raw == BTN_HELP:
+        _send_help(chat_id, dry_run=dry_run)
+        return
+    if raw == BTN_CHANNEL:
+        _send_channel(chat_id, dry_run=dry_run)
+        return
+
     parts = raw.split()
     cmd = parts[0].lower().split("@")[0]
 
-    if cmd in ("/start", "start", "/help", "help"):
-        prefs = state.get_or_create_user(chat_id)
-        msg = f"Registered.\n\n{_prefs_text(prefs)}\n\n{HELP}"
-        notify.send_message(chat_id, msg, parse_mode=None, dry_run=dry_run)
+    if cmd in ("/start", "start", "/menu", "menu"):
+        _send_home(chat_id, dry_run=dry_run)
         return
-
+    if cmd in ("/help", "help"):
+        _send_help(chat_id, dry_run=dry_run)
+        return
+    if cmd in ("/preview", "preview", "/gmp"):
+        # /gmp alone opens preview; typed "/gmp 30" still supported below
+        if cmd in ("/gmp", "gmp") and len(parts) >= 2:
+            try:
+                val = float(parts[1])
+            except ValueError:
+                notify.send_message(
+                    chat_id,
+                    "Use <b>Settings</b> to pick a GMP filter, or tap Preview GMP.",
+                    reply_markup=keyboards.home_inline(),
+                    dry_run=dry_run,
+                )
+                return
+            prefs = state.update_user(chat_id, min_gmp_pct=val)
+            notify.send_message(
+                chat_id,
+                f"<b>Saved</b>\n\n{html_prefs(prefs)}",
+                reply_markup=keyboards.settings_inline(prefs),
+                dry_run=dry_run,
+            )
+            return
+        _send_preview(chat_id, dry_run=dry_run)
+        return
     if cmd in ("/settings", "/status", "settings", "status"):
-        prefs = state.get_or_create_user(chat_id)
-        notify.send_message(
-            chat_id,
-            f"{_prefs_text(prefs)}\n\nTip: /help for the full command list.",
-            parse_mode=None,
-            dry_run=dry_run,
-        )
+        _send_settings(chat_id, dry_run=dry_run)
         return
-
-    if cmd in ("/gmp", "gmp"):
-        if len(parts) < 2:
-            notify.send_message(chat_id, "Usage: /gmp 30", parse_mode=None, dry_run=dry_run)
-            return
+    if cmd in ("/sub", "sub") and len(parts) >= 2:
         try:
             val = float(parts[1])
         except ValueError:
-            notify.send_message(chat_id, "GMP must be a number", parse_mode=None, dry_run=dry_run)
-            return
-        prefs = state.update_user(chat_id, min_gmp_pct=val)
-        notify.send_message(
-            chat_id,
-            f"Saved.\n\n{_prefs_text(prefs)}",
-            parse_mode=None,
-            dry_run=dry_run,
-        )
-        return
-
-    if cmd in ("/sub", "sub"):
-        if len(parts) < 2:
-            notify.send_message(chat_id, "Usage: /sub 2", parse_mode=None, dry_run=dry_run)
-            return
-        try:
-            val = float(parts[1])
-        except ValueError:
-            notify.send_message(chat_id, "Sub must be a number", parse_mode=None, dry_run=dry_run)
+            _send_settings(chat_id, dry_run=dry_run)
             return
         prefs = state.update_user(chat_id, min_total_sub=val)
         notify.send_message(
             chat_id,
-            f"Saved.\n\n{_prefs_text(prefs)}",
-            parse_mode=None,
+            f"<b>Saved</b>\n\n{html_prefs(prefs)}",
+            reply_markup=keyboards.settings_inline(prefs),
             dry_run=dry_run,
         )
         return
-
-    if cmd in ("/board", "board"):
-        if len(parts) < 2 or parts[1].lower() not in ("main", "all", "sme"):
-            notify.send_message(
-                chat_id, "Usage: /board main | /board all", parse_mode=None, dry_run=dry_run
-            )
-            return
+    if cmd in ("/board", "board") and len(parts) >= 2:
         include = parts[1].lower() in ("all", "sme")
         prefs = state.update_user(chat_id, include_sme=include)
         notify.send_message(
             chat_id,
-            f"Saved.\n\n{_prefs_text(prefs)}",
-            parse_mode=None,
+            f"<b>Saved</b>\n\n{html_prefs(prefs)}",
+            reply_markup=keyboards.settings_inline(prefs),
             dry_run=dry_run,
         )
         return
-
-    if cmd.startswith("/"):
-        notify.send_message(chat_id, HELP, parse_mode=None, dry_run=dry_run)
+    if cmd in ("/channel", "channel"):
+        _send_channel(chat_id, dry_run=dry_run)
         return
 
-    # Plain text — nudge toward the menu
+    if cmd.startswith("/"):
+        _send_help(chat_id, dry_run=dry_run)
+        return
+
     notify.send_message(
         chat_id,
-        "I only understand slash commands.\nTap / or send /help for the guide.",
-        parse_mode=None,
+        "Use the buttons below — Preview GMP, Settings, Help, or Channel.",
+        reply_markup=keyboards.main_reply_keyboard(),
         dry_run=dry_run,
     )
+
+
+def html_prefs(prefs: dict[str, Any]) -> str:
+    import html as html_mod
+
+    return html_mod.escape(render.prefs_summary(prefs), quote=False)
+
+
+def handle_callback(
+    chat_id: int | str,
+    data: str,
+    *,
+    callback_query_id: str,
+    message_id: int | None,
+    dry_run: bool,
+) -> None:
+    data = (data or "").strip()
+    toast: str | None = None
+
+    if data in ("home", "menu", "start"):
+        notify.answer_callback(callback_query_id, text="Home", dry_run=dry_run)
+        _send_home(chat_id, dry_run=dry_run)
+        return
+    if data == "help":
+        notify.answer_callback(callback_query_id, text="Help", dry_run=dry_run)
+        _send_help(chat_id, dry_run=dry_run)
+        return
+    if data == "preview":
+        notify.answer_callback(callback_query_id, text="Building preview…", dry_run=dry_run)
+        _send_preview(chat_id, dry_run=dry_run)
+        return
+    if data == "settings":
+        notify.answer_callback(callback_query_id, text="Settings", dry_run=dry_run)
+        _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
+        return
+    if data == "channel":
+        notify.answer_callback(callback_query_id, dry_run=dry_run)
+        _send_channel(chat_id, dry_run=dry_run)
+        return
+
+    if data.startswith("gmp:"):
+        try:
+            val = float(data.split(":", 1)[1])
+        except ValueError:
+            notify.answer_callback(callback_query_id, text="Invalid GMP", dry_run=dry_run)
+            return
+        state.update_user(chat_id, min_gmp_pct=val)
+        toast = f"Min GMP set to {val:g}%"
+        notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
+        _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
+        return
+
+    if data.startswith("sub:"):
+        try:
+            val = float(data.split(":", 1)[1])
+        except ValueError:
+            notify.answer_callback(callback_query_id, text="Invalid sub", dry_run=dry_run)
+            return
+        state.update_user(chat_id, min_total_sub=val)
+        toast = f"Min subscription set to {val:g}x"
+        notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
+        _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
+        return
+
+    if data.startswith("board:"):
+        include = data.split(":", 1)[1].lower() in ("all", "sme")
+        state.update_user(chat_id, include_sme=include)
+        toast = "MAIN + SME" if include else "MAIN only"
+        notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
+        _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
+        return
+
+    notify.answer_callback(callback_query_id, text="Unknown action", dry_run=dry_run)
 
 
 def drain_updates(*, dry_run: bool = False) -> int:
@@ -200,7 +346,10 @@ def drain_updates(*, dry_run: bool = False) -> int:
     ensure_bot_commands()
 
     offset = _load_offset()
-    params: dict[str, Any] = {"timeout": 0, "allowed_updates": '["message"]'}
+    params: dict[str, Any] = {
+        "timeout": 0,
+        "allowed_updates": '["message","callback_query"]',
+    }
     if offset is not None:
         params["offset"] = offset
 
@@ -217,6 +366,27 @@ def drain_updates(*, dry_run: bool = False) -> int:
         uid = upd.get("update_id")
         if uid is not None:
             max_update = uid + 1 if max_update is None else max(max_update, uid + 1)
+
+        cb = upd.get("callback_query")
+        if cb:
+            chat = ((cb.get("message") or {}).get("chat")) or {}
+            chat_id = chat.get("id") or (cb.get("from") or {}).get("id")
+            message_id = (cb.get("message") or {}).get("message_id")
+            if chat_id is None:
+                continue
+            try:
+                handle_callback(
+                    chat_id,
+                    cb.get("data") or "",
+                    callback_query_id=str(cb.get("id")),
+                    message_id=message_id,
+                    dry_run=dry_run,
+                )
+                handled += 1
+            except Exception as exc:  # noqa: BLE001
+                log.exception("Failed callback from %s: %s", chat_id, exc)
+            continue
+
         msg = upd.get("message") or upd.get("edited_message")
         if not msg:
             continue
