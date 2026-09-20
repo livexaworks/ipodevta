@@ -16,6 +16,18 @@ DISCLAIMER = (
 RULE = "────────────"
 TREND_ARROW = {"rising": "↗", "falling": "↘", "flat": "→"}
 
+# Bot profile copy (setMyShortDescription / setMyDescription)
+SHORT_DESCRIPTION = (
+    "IPO fills without the clutter. Clear 👍 / 👎 with GMP and subscription."
+)
+BOT_DESCRIPTION = (
+    "IPODevta removes the clutter from IPO fill decisions.\n\n"
+    "You get a simple 👍 or 👎 with GMP and subscription numbers, "
+    "using filters you set.\n\n"
+    "Tap Feedback anytime to send a note to the team.\n\n"
+    "Information only - not investment advice. Read the RHP."
+)
+
 
 def esc(text: Any) -> str:
     if text is None:
@@ -69,10 +81,10 @@ def _lot_line(ipo: dict[str, Any]) -> str | None:
     if price is not None:
         try:
             amount = int(lot) * float(price)
-            return f"Lot {int(lot)} · ≈ ₹{amount:,.0f}"
+            return f"Lot          {int(lot)}  ·  ≈ ₹{amount:,.0f}"
         except (TypeError, ValueError):
             pass
-    return f"Lot {lot}"
+    return f"Lot          {lot}"
 
 
 def prefs_summary(prefs: dict[str, Any]) -> str:
@@ -92,21 +104,25 @@ def welcome_text(prefs: dict[str, Any]) -> str:
     channel = keyboards.channel_url()
     return "\n".join(
         [
-            "<b>IPO Devta</b>",
-            "<i>Your IPO fill assistant</i>",
+            "<b>IPODevta</b>",
+            "<i>IPO fills without the clutter.</i>",
             "",
-            "On closing days you get a clear 👍 / 👎 view from "
-            "<b>your</b> filters - so you know what to consider filing.",
+            "On closing days you get:",
+            "• A clear 👍 or 👎 for each issue",
+            "• GMP and subscription in one place",
+            "• Filters you control",
             "",
             prefs_block(prefs),
             "",
             RULE,
             "",
-            "Use the buttons below - no typing needed.",
+            "Use the buttons below. No typing needed.",
             "",
-            f'Prefer a shared feed? <a href="{channel}">Join the channel</a>',
+            f'Prefer a shared list? <a href="{channel}">Join the channel</a>',
             "",
-            "<i>No selling. No promotions. Just fill reminders.</i>",
+            "Something off? Tap <b>Feedback</b>.",
+            "",
+            "<i>No selling. No promotions.</i>",
         ]
     )
 
@@ -115,21 +131,21 @@ def help_text() -> str:
     channel = keyboards.channel_url()
     return "\n".join(
         [
-            "<b>How it works</b>",
+            "<b>What you get</b>",
             "",
             "<b>Preview GMP</b>",
-            "Last five scored issues with your filters.",
+            "Recent issues with your filters applied.",
             "",
             "<b>Settings</b>",
-            "Tap to set GMP %, subscription, and board.",
+            "Your GMP %, subscription floor, and board.",
             "",
             "<b>Channel</b>",
-            "Public closing-day feed without personal filters.",
+            "Shared closing-day list without personal filters.",
+            "",
+            "<b>Feedback</b>",
+            "Send a short note to the team.",
             "",
             RULE,
-            "",
-            "Weekday morning - personalized DM when issues close",
-            "Weekday evening - book recorded for next day",
             "",
             f'<a href="{channel}">Open channel</a>',
             "",
@@ -145,8 +161,21 @@ def settings_text(prefs: dict[str, Any]) -> str:
             "",
             prefs_block(prefs),
             "",
-            "Tap a value below to update.",
-            "Changes apply to Preview and closing-day DMs right away.",
+            "Tap a value below to change it.",
+            "Your next Preview and closing-day notes use the new values.",
+        ]
+    )
+
+
+def feedback_prompt() -> str:
+    return "\n".join(
+        [
+            "<b>Feedback</b>",
+            "",
+            "Send your note in one message.",
+            "We will forward it to the team.",
+            "",
+            "Type <code>cancel</code> to stop.",
         ]
     )
 
@@ -157,11 +186,11 @@ def render_preview(
     items: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
 ) -> str:
     if source == "live":
-        heading = "Preview · live open issues"
-        note = "History is still building - scoring open issues with your filters."
+        heading = "Preview"
+        note = "Open issues scored with your filters."
     else:
-        heading = "Preview · last 5 processed"
-        note = "Same scoring logic as your closing-day DM."
+        heading = "Preview"
+        note = "Recent issues scored with your filters."
 
     if not items:
         return "\n".join(
@@ -169,7 +198,7 @@ def render_preview(
                 f"<b>{esc(heading)}</b>",
                 "",
                 "Nothing to show yet.",
-                "Check again after the next market scan.",
+                "Check again later.",
                 "",
                 prefs_block(prefs),
             ]
@@ -186,14 +215,16 @@ def render_preview(
         RULE,
     ]
     if ups:
-        parts.extend(["", f"<b>Consider filing · {len(ups)}</b>", ""])
+        parts.extend(["", f"<b>Looks good · {len(ups)}</b>", ""])
         for ipo, _ok, _reasons, prev, live in ups:
             parts.append(render_thumb_up(ipo, prev=prev, live=live))
-            parts.append("")
+            parts.extend(["", RULE, ""])
     if downs:
-        parts.extend([f"<b>Skip · {len(downs)}</b>", ""])
-        for ipo, _ok, reasons, _prev, _live in downs:
+        parts.extend([f"<b>Better to skip · {len(downs)}</b>", ""])
+        for i, (ipo, _ok, reasons, _prev, _live) in enumerate(downs):
             parts.append(render_thumb_down(ipo, reasons))
+            if i < len(downs) - 1:
+                parts.append("")
         parts.append("")
     parts.append(DISCLAIMER)
     return "\n".join(parts).strip()
@@ -208,28 +239,30 @@ def render_thumb_up(
     gmp = ipo.get("gmp")
     price = ipo.get("price_high")
     gmp_pct = ipo.get("gmp_pct")
-    conf = esc(ipo.get("confidence") or "n/a")
+
     lines = [
-        f"👍 <b>{esc(name)}</b>",
-        (
-            f"GMP  <code>₹{_fmt_num(gmp)}</code> on <code>₹{_fmt_num(price)}</code>  =  "
-            f"<b>{_fmt_num(gmp_pct, suffix='%')}</b>  {arrow}"
-        ),
-        (
-            f"Quality  {_fmt_num(ipo.get('n_sources'))} sources · "
-            f"{_fmt_num(ipo.get('spread_pct'), suffix='%')} spread · {conf}"
-        ),
+        f"👍  <b>{esc(name)}</b>",
+        "",
+        f"GMP          ₹{_fmt_num(gmp)}  on  ₹{_fmt_num(price)}",
+        f"             <b>{_fmt_num(gmp_pct, suffix='%')}</b>  {arrow}",
+        "",
     ]
     if prev is not None:
-        lines.append(
-            "Sub (prior)  "
-            f"QIB {_fmt_x(prev.get('sub_qib'))} · "
-            f"NII {_fmt_x(prev.get('sub_nii'))} · "
-            f"Ret {_fmt_x(prev.get('sub_retail'))} · "
-            f"<b>{_fmt_x(prev.get('sub_total'))}</b>"
+        lines.extend(
+            [
+                "Subscription (prior close)",
+                (
+                    f"QIB {_fmt_x(prev.get('sub_qib'))}  ·  "
+                    f"NII {_fmt_x(prev.get('sub_nii'))}  ·  "
+                    f"Retail {_fmt_x(prev.get('sub_retail'))}"
+                ),
+                f"Total        <b>{_fmt_x(prev.get('sub_total'))}</b>",
+                "",
+            ]
         )
     else:
-        lines.append("Sub (prior)  n/a")
+        lines.extend(["Subscription (prior close)", "n/a", ""])
+
     lines.append(f"Live book    {_fmt_x((live or ipo).get('sub_total'))}")
     lot = _lot_line(ipo)
     if lot:
@@ -237,15 +270,25 @@ def render_thumb_up(
     close = ipo.get("close_date")
     if close:
         lines.append(f"Closes       {esc(_date_heading(str(close)))}")
+    lines.extend(["", "<b>This looks good · thumbs up</b>"])
     return "\n".join(lines)
 
 
 def render_thumb_down(ipo: dict[str, Any], reasons: list[str]) -> str:
     name = _short_name(ipo.get("name") or ipo.get("ipo_id") or "?")
-    reason = reasons[0] if reasons else "did not pass filters"
+    reason = reasons[0] if reasons else "did not pass your filters"
     gmp_pct = ipo.get("gmp_pct")
-    gmp_bit = f" · {_fmt_num(gmp_pct, suffix='%')}" if gmp_pct is not None else ""
-    return f"👎 <b>{esc(name)}</b>{gmp_bit}\n    <i>{esc(reason)}</i>"
+    lines = [
+        f"👎  <b>{esc(name)}</b>",
+        "",
+        f"GMP          {_fmt_num(gmp_pct, suffix='%')}",
+        "",
+        "Why skip",
+        f"<i>{esc(reason)}</i>",
+        "",
+        "<b>Better to skip · thumbs down</b>",
+    ]
+    return "\n".join(lines)
 
 
 def render_dm(
@@ -257,20 +300,22 @@ def render_dm(
     ups = [x for x in items if x[1]]
     downs = [x for x in items if not x[1]]
     parts = [
-        f"<b>Closing today</b>",
+        "<b>Closing today</b>",
         f"<i>{esc(_date_heading(date_iso))}</i>",
         "",
         RULE,
     ]
     if ups:
-        parts.extend(["", f"<b>Consider filing · {len(ups)}</b>", ""])
+        parts.extend(["", f"<b>Looks good · {len(ups)}</b>", ""])
         for ipo, _ok, _reasons, prev, live in ups:
             parts.append(render_thumb_up(ipo, prev=prev, live=live))
-            parts.append("")
+            parts.extend(["", RULE, ""])
     if downs:
-        parts.extend([f"<b>Skip · {len(downs)}</b>", ""])
-        for ipo, _ok, reasons, _prev, _live in downs:
+        parts.extend([f"<b>Better to skip · {len(downs)}</b>", ""])
+        for i, (ipo, _ok, reasons, _prev, _live) in enumerate(downs):
             parts.append(render_thumb_down(ipo, reasons))
+            if i < len(downs) - 1:
+                parts.append("")
         parts.append("")
     if not ups and not downs:
         parts.extend(["", "No issues to show.", ""])
@@ -286,23 +331,25 @@ def render_channel(date_iso: str, ipos: list[dict[str, Any]]) -> str:
         RULE,
         "",
     ]
-    for ipo in ipos:
+    for i, ipo in enumerate(ipos):
         name = _short_name(ipo.get("name") or "?")
         board = ipo.get("board") or "n/a"
         parts.append(f"<b>{esc(name)}</b>  ·  {esc(board)}")
-        parts.append(
-            f"GMP  <code>₹{_fmt_num(ipo.get('gmp'))}</code> on "
-            f"<code>₹{_fmt_num(ipo.get('price_high'))}</code>  =  "
-            f"<b>{_fmt_num(ipo.get('gmp_pct'), suffix='%')}</b>"
-        )
-        parts.append(
-            f"Quality  {esc(ipo.get('confidence') or 'n/a')} · "
-            f"{_fmt_num(ipo.get('n_sources'))} sources"
-        )
-        parts.append(
-            f"Sub  QIB {_fmt_x(ipo.get('sub_qib'))} · NII {_fmt_x(ipo.get('sub_nii'))} · "
-            f"Ret {_fmt_x(ipo.get('sub_retail'))} · <b>{_fmt_x(ipo.get('sub_total'))}</b>"
-        )
         parts.append("")
+        parts.append(
+            f"GMP          ₹{_fmt_num(ipo.get('gmp'))}  on  ₹{_fmt_num(ipo.get('price_high'))}"
+        )
+        parts.append(f"             <b>{_fmt_num(ipo.get('gmp_pct'), suffix='%')}</b>")
+        parts.append("")
+        parts.append(
+            f"Subscription  QIB {_fmt_x(ipo.get('sub_qib'))}  ·  "
+            f"NII {_fmt_x(ipo.get('sub_nii'))}  ·  "
+            f"Retail {_fmt_x(ipo.get('sub_retail'))}"
+        )
+        parts.append(f"Total         <b>{_fmt_x(ipo.get('sub_total'))}</b>")
+        if i < len(ipos) - 1:
+            parts.extend(["", RULE, ""])
+        else:
+            parts.append("")
     parts.append(DISCLAIMER)
     return "\n".join(parts).strip()
