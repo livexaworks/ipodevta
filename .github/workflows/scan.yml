@@ -3,12 +3,13 @@ on:
   schedule:
     - cron: "55 5 * * 1-5"    # 10:55 IST, alert mode
     - cron: "45 11 * * 1-5"   # 17:15 IST, snapshot mode
+    - cron: "15 * * * 1-5"    # hourly weekdays, command replies only
   workflow_dispatch:
     inputs:
       mode:
         type: choice
-        options: [snapshot, alert, dry-run]
-        default: dry-run
+        options: [snapshot, alert, dry-run, commands]
+        default: commands
 
 concurrency:
   group: ipo-scan
@@ -35,8 +36,10 @@ jobs:
             echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "55 5 * * 1-5" ]; then
             echo "mode=alert" >> $GITHUB_OUTPUT
-          else
+          elif [ "${{ github.event.schedule }}" = "45 11 * * 1-5" ]; then
             echo "mode=snapshot" >> $GITHUB_OUTPUT
+          else
+            echo "mode=commands" >> $GITHUB_OUTPUT
           fi
       - run: python -m bot.run --mode ${{ steps.m.outputs.mode }}
         env:
