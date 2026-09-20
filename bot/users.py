@@ -14,17 +14,36 @@ log = logging.getLogger(__name__)
 OFFSET_PATH = config.DATA_DIR / "telegram_offset.json"
 
 HELP = (
-    "IPO Devta — screening info only, not advice.\n\n"
-    "Commands:\n"
-    "/settings — show prefs\n"
-    "/gmp 30 — min GMP %\n"
-    "/sub 2 — min total subscription (x)\n"
-    "/board main — MAIN only\n"
-    "/board all — MAIN + SME\n"
-    "/status — same as /settings\n\n"
-    "Alerts go out on weekday mornings when issues close that day. "
-    "Commands are processed when the next scheduled run wakes (free Actions)."
+    "IPO Devta — personalized IPO screening.\n"
+    "Information only, not investment advice.\n\n"
+    "How it works\n"
+    "• Weekday mornings: if IPOs close that day, you get a DM "
+    "scored with YOUR prefs (👍/👎 + numbers).\n"
+    "• Public channel: unfiltered GMP feed for the same day.\n"
+    "• Grey-market premium is unofficial and can be manipulated. Read the RHP.\n\n"
+    "Commands (tap / or type them)\n"
+    "/start — register + show this guide\n"
+    "/help — show this guide again\n"
+    "/settings — show your current prefs\n"
+    "/status — same as /settings\n"
+    "/gmp 30 — set min GMP % (example: 30)\n"
+    "/sub 2 — set min total subscription in times (example: 2x)\n"
+    "/board main — MAIN board only\n"
+    "/board all — MAIN + SME\n\n"
+    "Replies usually arrive within about an hour on weekdays "
+    "(free GitHub Actions — not an always-on server). "
+    "After you send a command, wait for the confirmation DM before changing it again."
 )
+
+BOT_COMMANDS = [
+    {"command": "start", "description": "Register and show the guide"},
+    {"command": "help", "description": "Show commands and how alerts work"},
+    {"command": "settings", "description": "Show your current prefs"},
+    {"command": "status", "description": "Same as /settings"},
+    {"command": "gmp", "description": "Set min GMP %, e.g. /gmp 30"},
+    {"command": "sub", "description": "Set min total sub, e.g. /sub 2"},
+    {"command": "board", "description": "MAIN only or MAIN+SME: /board main|all"},
+]
 
 
 def _load_offset() -> int | None:
@@ -58,6 +77,21 @@ def _api(method: str, **params: Any) -> dict[str, Any]:
     return data
 
 
+def ensure_bot_commands() -> None:
+    """Register the / menu so users see every command in Telegram."""
+    token = config.telegram_token()
+    if not token:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{token}/setMyCommands"
+        resp = requests.post(url, json={"commands": BOT_COMMANDS}, timeout=30)
+        data = resp.json()
+        if not data.get("ok"):
+            log.warning("setMyCommands failed: %s", data)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("setMyCommands failed: %s", exc)
+
+
 def _prefs_text(prefs: dict[str, Any]) -> str:
     board = "MAIN + SME" if prefs.get("include_sme") else "MAIN only"
     return (
@@ -76,7 +110,7 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
     parts = raw.split()
     cmd = parts[0].lower().split("@")[0]
 
-    if cmd in ("/start", "start"):
+    if cmd in ("/start", "start", "/help", "help"):
         prefs = state.get_or_create_user(chat_id)
         msg = f"Registered.\n\n{_prefs_text(prefs)}\n\n{HELP}"
         notify.send_message(chat_id, msg, parse_mode=None, dry_run=dry_run)
@@ -84,7 +118,12 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
 
     if cmd in ("/settings", "/status", "settings", "status"):
         prefs = state.get_or_create_user(chat_id)
-        notify.send_message(chat_id, _prefs_text(prefs), parse_mode=None, dry_run=dry_run)
+        notify.send_message(
+            chat_id,
+            f"{_prefs_text(prefs)}\n\nTip: /help for the full command list.",
+            parse_mode=None,
+            dry_run=dry_run,
+        )
         return
 
     if cmd in ("/gmp", "gmp"):
@@ -97,7 +136,12 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
             notify.send_message(chat_id, "GMP must be a number", parse_mode=None, dry_run=dry_run)
             return
         prefs = state.update_user(chat_id, min_gmp_pct=val)
-        notify.send_message(chat_id, _prefs_text(prefs), parse_mode=None, dry_run=dry_run)
+        notify.send_message(
+            chat_id,
+            f"Saved.\n\n{_prefs_text(prefs)}",
+            parse_mode=None,
+            dry_run=dry_run,
+        )
         return
 
     if cmd in ("/sub", "sub"):
@@ -110,7 +154,12 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
             notify.send_message(chat_id, "Sub must be a number", parse_mode=None, dry_run=dry_run)
             return
         prefs = state.update_user(chat_id, min_total_sub=val)
-        notify.send_message(chat_id, _prefs_text(prefs), parse_mode=None, dry_run=dry_run)
+        notify.send_message(
+            chat_id,
+            f"Saved.\n\n{_prefs_text(prefs)}",
+            parse_mode=None,
+            dry_run=dry_run,
+        )
         return
 
     if cmd in ("/board", "board"):
@@ -121,11 +170,25 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
             return
         include = parts[1].lower() in ("all", "sme")
         prefs = state.update_user(chat_id, include_sme=include)
-        notify.send_message(chat_id, _prefs_text(prefs), parse_mode=None, dry_run=dry_run)
+        notify.send_message(
+            chat_id,
+            f"Saved.\n\n{_prefs_text(prefs)}",
+            parse_mode=None,
+            dry_run=dry_run,
+        )
         return
 
     if cmd.startswith("/"):
         notify.send_message(chat_id, HELP, parse_mode=None, dry_run=dry_run)
+        return
+
+    # Plain text — nudge toward the menu
+    notify.send_message(
+        chat_id,
+        "I only understand slash commands.\nTap / or send /help for the guide.",
+        parse_mode=None,
+        dry_run=dry_run,
+    )
 
 
 def drain_updates(*, dry_run: bool = False) -> int:
@@ -133,6 +196,8 @@ def drain_updates(*, dry_run: bool = False) -> int:
     if not config.telegram_token():
         log.warning("TELEGRAM_TOKEN unset — skip getUpdates")
         return 0
+
+    ensure_bot_commands()
 
     offset = _load_offset()
     params: dict[str, Any] = {"timeout": 0, "allowed_updates": '["message"]'}

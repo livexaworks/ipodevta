@@ -117,17 +117,22 @@ def run(mode: str) -> int:
     dry_run = mode == "dry-run"
     alert = mode in ("alert", "dry-run")
     # dry-run behaves like alert for building messages, but sends nothing
+    # to the channel. Command DMs always send for real so users get feedback.
     require_gmp = 2 if alert else 1
 
     today = config.today_ist()
     ts = config.format_ist()
 
-    # Always drain user commands first
+    # Always drain user commands first (replies are never dry-run)
     try:
-        n = users.drain_updates(dry_run=dry_run)
+        n = users.drain_updates(dry_run=False)
         log.info("Processed %d Telegram updates", n)
     except Exception as exc:  # noqa: BLE001
         log.exception("drain_updates: %s", exc)
+
+    if mode == "commands":
+        log.info("Commands-only mode complete.")
+        return 0
 
     try:
         enriched, warnings = collect(require_gmp_sources=require_gmp)
@@ -222,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="IPO GMP screening bot")
     parser.add_argument(
         "--mode",
-        choices=("snapshot", "alert", "dry-run"),
+        choices=("snapshot", "alert", "dry-run", "commands"),
         required=True,
     )
     args = parser.parse_args(argv)

@@ -25,17 +25,21 @@ Push a commit or run the workflow manually before that window expires.
 
 ## Commands (bot DM)
 
+Telegram shows these under the **/** menu (registered via `setMyCommands`).
+`/start` and `/help` also paste the full guide into the chat.
+
 | Command | Meaning |
 |---------|---------|
-| `/start` | Register with default gates |
+| `/start` / `/help` | Register + full in-chat manual |
 | `/settings` | Show current prefs |
 | `/gmp 30` | Min GMP % |
 | `/sub 2` | Min total subscription (x) |
 | `/board main` or `/board all` | MAIN only vs MAIN+SME |
 | `/status` | Same as settings |
 
-Because the bot runs on Actions cron (not an always-on server), command replies
-are processed when the next job runs (typically twice on weekdays).
+The bot is not always-on. Command replies are processed about **hourly on
+weekdays** (plus the alert/snapshot jobs). After DMing `/start`, run Actions
+manually with mode **`commands`** if you want the confirmation immediately.
 
 ## Local discovery (BSE field names)
 
@@ -52,7 +56,8 @@ python -m bot.discover
 ## Modes
 
 ```bash
-python -m bot.run --mode dry-run    # build message, send nothing
+python -m bot.run --mode commands   # reply to pending DMs only
+python -m bot.run --mode dry-run    # build alert text; still replies to DMs
 python -m bot.run --mode snapshot   # 17:15 IST — record only
 python -m bot.run --mode alert      # 10:55 IST — channel + personalized DMs
 ```
