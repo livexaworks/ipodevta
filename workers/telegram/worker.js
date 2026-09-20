@@ -15,6 +15,9 @@ const DEFAULTS = {
   include_sme: false,
 };
 
+const PREVIEW_COOLDOWN_SEC = 60;
+const RULE = "────────────";
+
 const BTN = {
   PREVIEW: "Preview GMP",
   SETTINGS: "Settings",
@@ -31,7 +34,7 @@ function channelUrl(channelId) {
 
 function prefsSummary(p) {
   const board = p.include_sme ? "MAIN + SME" : "MAIN only";
-  return `Min GMP: ${p.min_gmp_pct}%\nMin subscription: ${p.min_total_sub}x\nBoard: ${board}`;
+  return `GMP min     ${p.min_gmp_pct}%\nSub min     ${p.min_total_sub}x\nBoard       ${board}`;
 }
 
 function esc(s) {
@@ -41,42 +44,78 @@ function esc(s) {
     .replace(/>/g, "&gt;");
 }
 
+function prefsBlock(p) {
+  return `<b>Your filters</b>\n<code>${esc(prefsSummary(p))}</code>`;
+}
+
 function welcomeText(p, channelId) {
   const channel = channelUrl(channelId);
-  return (
-    `<b>IPO Devta</b>\n` +
-    `Your IPO fill assistant.\n\n` +
-    `On closing days you receive a clear 👍 / 👎 view based on ` +
-    `<b>your</b> filters - GMP, subscription, and board - so you know ` +
-    `what to consider filing.\n\n` +
-    `Use the buttons below. No typing required.\n\n` +
-    `<b>Your filters</b>\n${esc(prefsSummary(p))}\n\n` +
-    `Prefer a quieter feed? Join the public channel for the daily closing ` +
-    `list without personal filters:\n${esc(channel)}\n\n` +
-    `No selling. No promotions. Just timely IPO fill reminders.`
-  );
+  return [
+    "<b>IPO Devta</b>",
+    "<i>Your IPO fill assistant</i>",
+    "",
+    "On closing days you get a clear 👍 / 👎 view from <b>your</b> filters - so you know what to consider filing.",
+    "",
+    prefsBlock(p),
+    "",
+    RULE,
+    "",
+    "Use the buttons below - no typing needed.",
+    "",
+    `Prefer a shared feed? <a href="${channel}">Join the channel</a>`,
+    "",
+    "<i>No selling. No promotions. Just fill reminders.</i>",
+  ].join("\n");
 }
 
 function helpText(channelId) {
   const channel = channelUrl(channelId);
-  return (
-    `<b>How IPO Devta works</b>\n\n` +
-    `• <b>Preview GMP</b> - last five processed issues, scored with your filters.\n` +
-    `• <b>Settings</b> - tap to set min GMP %, min subscription, and board.\n` +
-    `• <b>Channel</b> - public closing-day feed if you prefer not to use DMs.\n\n` +
-    `Weekday mornings: when issues close that day, you get a personalized DM.\n` +
-    `Weekday evenings: we record the book for the next morning's decision.\n\n` +
-    `Channel: ${esc(channel)}\n\n` +
-    `Grey-market premium is unofficial and can move quickly.\n` +
-    `This is information only - not investment advice. Read the RHP.`
-  );
+  return [
+    "<b>How it works</b>",
+    "",
+    "<b>Preview GMP</b>",
+    "Last five scored issues with your filters.",
+    "",
+    "<b>Settings</b>",
+    "Tap to set GMP %, subscription, and board.",
+    "",
+    "<b>Channel</b>",
+    "Public closing-day feed without personal filters.",
+    "",
+    RULE,
+    "",
+    "Weekday morning - personalized DM when issues close",
+    "Weekday evening - book recorded for next day",
+    "",
+    `<a href="${channel}">Open channel</a>`,
+    "",
+    "<i>Grey-market premium is unofficial and can move quickly.\nInformation only - not investment advice. Read the RHP.</i>",
+  ].join("\n");
 }
 
 function settingsText(p) {
-  return (
-    `<b>Your filters</b>\n\n${esc(prefsSummary(p))}\n\n` +
-    `Tap a button to update. Closing-day DMs use these values right away.`
-  );
+  return [
+    "<b>Settings</b>",
+    "",
+    prefsBlock(p),
+    "",
+    "Tap a value below to update.",
+    "Changes apply to Preview and closing-day DMs right away.",
+  ].join("\n");
+}
+
+function channelText(channelId) {
+  const url = channelUrl(channelId);
+  return [
+    "<b>Public channel</b>",
+    "",
+    "Daily closing-day GMP feed.",
+    "No personal filters - useful if you want reminders without DMs.",
+    "",
+    RULE,
+    "",
+    `<a href="${url}">Join ${url.replace("https://t.me/", "@")}</a>`,
+  ].join("\n");
 }
 
 function mainKeyboard() {
@@ -202,7 +241,8 @@ async function sendHome(env, chatId) {
   });
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text: "Quick actions:",
+    text: "<b>Quick actions</b>",
+    parse_mode: "HTML",
     reply_markup: homeInline(env.CHANNEL_ID),
   });
 }
@@ -223,6 +263,7 @@ async function sendSettings(env, chatId, messageId) {
     chat_id: chatId,
     text: settingsText(prefs),
     parse_mode: "HTML",
+    disable_web_page_preview: true,
     reply_markup: settingsInline(prefs),
   };
   if (messageId) {
@@ -237,11 +278,7 @@ async function sendChannel(env, chatId) {
   const url = channelUrl(env.CHANNEL_ID);
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text:
-      `<b>Public channel</b>\n\n` +
-      `Daily closing-day GMP feed - no personal filters.\n` +
-      `Useful if you want reminders without DMs.\n\n` +
-      `<a href="${url}">Join ${url.replace("https://t.me/", "@")}</a>`,
+    text: channelText(env.CHANNEL_ID),
     parse_mode: "HTML",
     disable_web_page_preview: true,
     reply_markup: {
@@ -250,14 +287,69 @@ async function sendChannel(env, chatId) {
   });
 }
 
-async function sendPreviewAck(env, chatId) {
+async function previewLocked(env, chatId) {
+  const key = `cooldown:preview:${chatId}`;
+  return Boolean(await env.PREFS.get(key));
+}
+
+async function lockPreview(env, chatId) {
+  const key = `cooldown:preview:${chatId}`;
+  await env.PREFS.put(key, String(Date.now()), {
+    expirationTtl: PREVIEW_COOLDOWN_SEC,
+  });
+}
+
+async function sendPreviewAck(env, chatId, callbackQueryId) {
   await getPrefs(env, chatId);
+
+  if (await previewLocked(env, chatId)) {
+    const waitMsg =
+      "<b>Preview in progress</b>\n\n" +
+      "Your last request is still running.\n" +
+      "Please wait about <b>1 minute</b> before tapping again.";
+    if (callbackQueryId) {
+      await tg(env, "answerCallbackQuery", {
+        callback_query_id: callbackQueryId,
+        text: "Please wait ~1 min - preview still running",
+        show_alert: true,
+      });
+    }
+    await tg(env, "sendMessage", {
+      chat_id: chatId,
+      text: waitMsg,
+      parse_mode: "HTML",
+      reply_markup: homeInline(env.CHANNEL_ID),
+    });
+    return;
+  }
+
+  await lockPreview(env, chatId);
   const ok = await triggerPreview(env, chatId);
+  if (callbackQueryId) {
+    await tg(env, "answerCallbackQuery", {
+      callback_query_id: callbackQueryId,
+      text: ok ? "Preview started" : "Preview unavailable",
+    });
+  }
   await tg(env, "sendMessage", {
     chat_id: chatId,
     text: ok
-      ? "<b>Preview GMP</b>\n\nFetching the latest scores with your filters. This usually takes under a minute."
-      : "<b>Preview GMP</b>\n\nPreview is temporarily unavailable. Try again shortly, or wait for the next market scan.",
+      ? [
+          "<b>Preview GMP</b>",
+          "",
+          "Fetching scores with your filters…",
+          "",
+          RULE,
+          "",
+          "<i>Usually under 1 minute.</i>",
+          "Please don’t tap Preview again until it arrives.",
+        ].join("\n")
+      : [
+          "<b>Preview GMP</b>",
+          "",
+          "Temporarily unavailable.",
+          "Try again in a minute, or wait for the next market scan.",
+        ].join("\n"),
     parse_mode: "HTML",
     reply_markup: homeInline(env.CHANNEL_ID),
   });
@@ -282,7 +374,7 @@ async function handleText(env, chatId, text) {
 
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text: "Use the buttons below - Preview GMP, Settings, Help, or Channel.",
+    text: "Use the buttons below.\nPreview GMP · Settings · Help · Channel",
     reply_markup: mainKeyboard(),
   });
 }
@@ -293,10 +385,11 @@ async function handleCallback(env, cb) {
   const data = (cb.data || "").trim();
   if (!chatId) return;
 
-  const answer = async (text) =>
+  const answer = async (text, showAlert = false) =>
     tg(env, "answerCallbackQuery", {
       callback_query_id: cb.id,
       text: text || undefined,
+      show_alert: showAlert,
     });
 
   if (["home", "menu", "start"].includes(data)) {
@@ -316,8 +409,7 @@ async function handleCallback(env, cb) {
     return sendChannel(env, chatId);
   }
   if (data === "preview") {
-    await answer("Starting preview…");
-    return sendPreviewAck(env, chatId);
+    return sendPreviewAck(env, chatId, cb.id);
   }
 
   if (data.startsWith("gmp:")) {
@@ -325,7 +417,7 @@ async function handleCallback(env, cb) {
     const prefs = await getPrefs(env, chatId);
     prefs.min_gmp_pct = val;
     await savePrefs(env, chatId, prefs);
-    await answer(`Min GMP set to ${val}%`);
+    await answer(`Min GMP → ${val}%`);
     return sendSettings(env, chatId, messageId);
   }
   if (data.startsWith("sub:")) {
@@ -333,7 +425,7 @@ async function handleCallback(env, cb) {
     const prefs = await getPrefs(env, chatId);
     prefs.min_total_sub = val;
     await savePrefs(env, chatId, prefs);
-    await answer(`Min subscription set to ${val}x`);
+    await answer(`Min sub → ${val}x`);
     return sendSettings(env, chatId, messageId);
   }
   if (data.startsWith("board:")) {
