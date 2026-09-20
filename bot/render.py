@@ -100,6 +100,29 @@ def prefs_block(prefs: dict[str, Any]) -> str:
     return f"<b>Your filters</b>\n<code>{html.escape(prefs_summary(prefs), quote=False)}</code>"
 
 
+def channel_invite_text() -> str:
+    channel = keyboards.channel_url()
+    handle = channel.replace("https://t.me/", "@")
+    return "\n".join(
+        [
+            "<b>Public channel</b>",
+            "",
+            "No personal filters here.",
+            "",
+            "On closing days this channel posts the GMP picture for issues "
+            "closing that day. If you only want to know where GMP stands "
+            "on the last day, this is the place. It will keep posting that "
+            "update in channel form.",
+            "",
+            RULE,
+            "",
+            f'<a href="{channel}">Join {handle}</a>',
+            "",
+            "Happy filing. All the best for allotments in the companies you care about.",
+        ]
+    )
+
+
 def welcome_text(prefs: dict[str, Any]) -> str:
     channel = keyboards.channel_url()
     return "\n".join(
@@ -118,11 +141,11 @@ def welcome_text(prefs: dict[str, Any]) -> str:
             "",
             "Use the buttons below. No typing needed.",
             "",
-            f'Prefer a shared list? <a href="{channel}">Join the channel</a>',
+            f'Want closing-day GMP with no filters? <a href="{channel}">Join the public channel</a>',
             "",
             "Something off? Tap <b>Feedback</b>.",
             "",
-            "<i>No selling. No promotions.</i>",
+            "<i>Happy filing. All the best for allotments.</i>",
         ]
     )
 
@@ -140,14 +163,14 @@ def help_text() -> str:
             "Your GMP %, subscription floor, and board.",
             "",
             "<b>Channel</b>",
-            "Shared closing-day list without personal filters.",
+            "Closing-day GMP updates with no personal filters.",
             "",
             "<b>Feedback</b>",
             "Send a short note to the team.",
             "",
             RULE,
             "",
-            f'<a href="{channel}">Open channel</a>',
+            f'<a href="{channel}">Open the public channel</a>',
             "",
             DISCLAIMER,
         ]

@@ -76,11 +76,11 @@ function welcomeText(p, channelId) {
     "",
     "Use the buttons below. No typing needed.",
     "",
-    `Prefer a shared list? <a href="${channel}">Join the channel</a>`,
+    `Want closing-day GMP with no filters? <a href="${channel}">Join the public channel</a>`,
     "",
     "Something off? Tap <b>Feedback</b>.",
     "",
-    "<i>No selling. No promotions.</i>",
+    "<i>Happy filing. All the best for allotments.</i>",
   ].join("\n");
 }
 
@@ -96,14 +96,14 @@ function helpText(channelId) {
     "Your GMP %, subscription floor, and board.",
     "",
     "<b>Channel</b>",
-    "Shared closing-day list without personal filters.",
+    "Closing-day GMP updates with no personal filters.",
     "",
     "<b>Feedback</b>",
     "Send a short note to the team.",
     "",
     RULE,
     "",
-    `<a href="${channel}">Open channel</a>`,
+    `<a href="${channel}">Open the public channel</a>`,
     "",
     "<i>Grey-market premium is unofficial and can move quickly.\nInformation only - not investment advice. Read the RHP.</i>",
   ].join("\n");
@@ -122,15 +122,19 @@ function settingsText(p) {
 
 function channelText(channelId) {
   const url = channelUrl(channelId);
+  const handle = url.replace("https://t.me/", "@");
   return [
     "<b>Public channel</b>",
     "",
-    "Shared closing-day list.",
-    "No personal filters.",
+    "No personal filters here.",
+    "",
+    "On closing days this channel posts the GMP picture for issues closing that day. If you only want to know where GMP stands on the last day, this is the place. It will keep posting that update in channel form.",
     "",
     RULE,
     "",
-    `<a href="${url}">Join ${url.replace("https://t.me/", "@")}</a>`,
+    `<a href="${url}">Join ${handle}</a>`,
+    "",
+    "Happy filing. All the best for allotments in the companies you care about.",
   ].join("\n");
 }
 

@@ -162,12 +162,7 @@ def _send_channel(chat_id: int | str, *, dry_run: bool) -> None:
     url = keyboards.channel_url()
     notify.send_message(
         chat_id,
-        (
-            "<b>Public channel</b>\n\n"
-            "Daily closing-day GMP feed - no personal filters.\n"
-            "Useful if you want reminders without DMs.\n\n"
-            f'<a href="{url}">Join {url.replace("https://t.me/", "@")}</a>'
-        ),
+        render.channel_invite_text(),
         reply_markup={"inline_keyboard": [[{"text": "Join channel", "url": url}]]},
         dry_run=dry_run,
     )
