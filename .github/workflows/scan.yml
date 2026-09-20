@@ -1,9 +1,9 @@
 name: IPO scan
 on:
   schedule:
-    - cron: "55 5 * * 1-5"    # 10:55 IST, alert mode
-    - cron: "45 11 * * 1-5"   # 17:15 IST, snapshot mode
-    - cron: "15 * * * 1-5"    # hourly weekdays, command replies only
+    - cron: "55 5 * * 1-5"    # 10:55 IST, alert mode (weekdays)
+    - cron: "45 11 * * 1-5"   # 17:15 IST, snapshot mode (weekdays)
+    - cron: "*/20 * * * *"    # every 20 min, command / button replies
   workflow_dispatch:
     inputs:
       mode:

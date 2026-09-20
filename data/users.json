@@ -4,5 +4,11 @@
     "min_total_sub": 1.0,
     "include_sme": false,
     "updated": "2026-09-20T13:04:08+05:30"
+  },
+  "1645772786": {
+    "min_gmp_pct": 24.0,
+    "min_total_sub": 1.0,
+    "include_sme": false,
+    "updated": "2026-09-20T15:27:48+05:30"
   }
 }

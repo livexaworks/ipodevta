@@ -138,11 +138,19 @@ def _send_settings(
     notify.send_message(chat_id, text, reply_markup=markup, dry_run=dry_run)
 
 
-def _send_preview(chat_id: int | str, *, dry_run: bool) -> None:
+def _send_preview(
+    chat_id: int | str,
+    *,
+    dry_run: bool,
+    live_pool: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]] | None:
     prefs = state.get_or_create_user(chat_id)
-    source, items = preview.build_preview(prefs, limit=5)
+    pool = live_pool
+    # Only fetch live when snapshots are empty
+    if pool is None and not preview._latest_unique_snapshots(1):
+        pool = preview.load_live_preview_pool(5)
+    source, items = preview.build_preview(prefs, limit=5, live_pool=pool)
     text = render.render_preview(prefs, source, items)
-    # Telegram hard limit ~4096; trim if needed
     if len(text) > 4000:
         text = text[:3900] + "\n\n…truncated."
     notify.send_message(
@@ -151,6 +159,7 @@ def _send_preview(chat_id: int | str, *, dry_run: bool) -> None:
         reply_markup=keyboards.home_inline(),
         dry_run=dry_run,
     )
+    return pool
 
 
 def _send_channel(chat_id: int | str, *, dry_run: bool) -> None:
@@ -163,73 +172,75 @@ def _send_channel(chat_id: int | str, *, dry_run: bool) -> None:
             "Useful if you want reminders without DMs.\n\n"
             f'<a href="{url}">Join {url.replace("https://t.me/", "@")}</a>'
         ),
-        reply_markup={
-            "inline_keyboard": [[{"text": "Join channel", "url": url}]]
-        },
+        reply_markup={"inline_keyboard": [[{"text": "Join channel", "url": url}]]},
         dry_run=dry_run,
     )
 
 
-def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
+def handle_text(
+    chat_id: int | str,
+    text: str,
+    *,
+    dry_run: bool,
+    live_pool: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]] | None:
     raw = (text or "").strip()
     if not raw:
-        return
+        return live_pool
 
-    # Reply-keyboard buttons (exact labels)
     if raw == BTN_PREVIEW:
-        _send_preview(chat_id, dry_run=dry_run)
-        return
+        return _send_preview(chat_id, dry_run=dry_run, live_pool=live_pool)
     if raw == BTN_SETTINGS:
         _send_settings(chat_id, dry_run=dry_run)
-        return
+        return live_pool
     if raw == BTN_HELP:
         _send_help(chat_id, dry_run=dry_run)
-        return
+        return live_pool
     if raw == BTN_CHANNEL:
         _send_channel(chat_id, dry_run=dry_run)
-        return
+        return live_pool
 
     parts = raw.split()
     cmd = parts[0].lower().split("@")[0]
 
     if cmd in ("/start", "start", "/menu", "menu"):
         _send_home(chat_id, dry_run=dry_run)
-        return
+        return live_pool
     if cmd in ("/help", "help"):
         _send_help(chat_id, dry_run=dry_run)
-        return
-    if cmd in ("/preview", "preview", "/gmp"):
-        # /gmp alone opens preview; typed "/gmp 30" still supported below
-        if cmd in ("/gmp", "gmp") and len(parts) >= 2:
-            try:
-                val = float(parts[1])
-            except ValueError:
-                notify.send_message(
-                    chat_id,
-                    "Use <b>Settings</b> to pick a GMP filter, or tap Preview GMP.",
-                    reply_markup=keyboards.home_inline(),
-                    dry_run=dry_run,
-                )
-                return
-            prefs = state.update_user(chat_id, min_gmp_pct=val)
+        return live_pool
+    if cmd in ("/preview", "preview") or (
+        cmd in ("/gmp", "gmp") and len(parts) < 2
+    ):
+        return _send_preview(chat_id, dry_run=dry_run, live_pool=live_pool)
+    if cmd in ("/gmp", "gmp") and len(parts) >= 2:
+        try:
+            val = float(parts[1])
+        except ValueError:
             notify.send_message(
                 chat_id,
-                f"<b>Saved</b>\n\n{html_prefs(prefs)}",
-                reply_markup=keyboards.settings_inline(prefs),
+                "Use <b>Settings</b> to pick a GMP filter, or tap Preview GMP.",
+                reply_markup=keyboards.home_inline(),
                 dry_run=dry_run,
             )
-            return
-        _send_preview(chat_id, dry_run=dry_run)
-        return
+            return live_pool
+        prefs = state.update_user(chat_id, min_gmp_pct=val)
+        notify.send_message(
+            chat_id,
+            f"<b>Saved</b>\n\n{html_prefs(prefs)}",
+            reply_markup=keyboards.settings_inline(prefs),
+            dry_run=dry_run,
+        )
+        return live_pool
     if cmd in ("/settings", "/status", "settings", "status"):
         _send_settings(chat_id, dry_run=dry_run)
-        return
+        return live_pool
     if cmd in ("/sub", "sub") and len(parts) >= 2:
         try:
             val = float(parts[1])
         except ValueError:
             _send_settings(chat_id, dry_run=dry_run)
-            return
+            return live_pool
         prefs = state.update_user(chat_id, min_total_sub=val)
         notify.send_message(
             chat_id,
@@ -237,7 +248,7 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
             reply_markup=keyboards.settings_inline(prefs),
             dry_run=dry_run,
         )
-        return
+        return live_pool
     if cmd in ("/board", "board") and len(parts) >= 2:
         include = parts[1].lower() in ("all", "sme")
         prefs = state.update_user(chat_id, include_sme=include)
@@ -247,14 +258,14 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
             reply_markup=keyboards.settings_inline(prefs),
             dry_run=dry_run,
         )
-        return
+        return live_pool
     if cmd in ("/channel", "channel"):
         _send_channel(chat_id, dry_run=dry_run)
-        return
+        return live_pool
 
     if cmd.startswith("/"):
         _send_help(chat_id, dry_run=dry_run)
-        return
+        return live_pool
 
     notify.send_message(
         chat_id,
@@ -262,6 +273,7 @@ def handle_text(chat_id: int | str, text: str, *, dry_run: bool) -> None:
         reply_markup=keyboards.main_reply_keyboard(),
         dry_run=dry_run,
     )
+    return live_pool
 
 
 def html_prefs(prefs: dict[str, Any]) -> str:
@@ -277,54 +289,55 @@ def handle_callback(
     callback_query_id: str,
     message_id: int | None,
     dry_run: bool,
-) -> None:
+    live_pool: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]] | None:
     data = (data or "").strip()
-    toast: str | None = None
 
     if data in ("home", "menu", "start"):
         notify.answer_callback(callback_query_id, text="Home", dry_run=dry_run)
         _send_home(chat_id, dry_run=dry_run)
-        return
+        return live_pool
     if data == "help":
         notify.answer_callback(callback_query_id, text="Help", dry_run=dry_run)
         _send_help(chat_id, dry_run=dry_run)
-        return
+        return live_pool
     if data == "preview":
         notify.answer_callback(callback_query_id, text="Building preview…", dry_run=dry_run)
-        _send_preview(chat_id, dry_run=dry_run)
-        return
+        return _send_preview(chat_id, dry_run=dry_run, live_pool=live_pool)
     if data == "settings":
         notify.answer_callback(callback_query_id, text="Settings", dry_run=dry_run)
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
-        return
+        return live_pool
     if data == "channel":
         notify.answer_callback(callback_query_id, dry_run=dry_run)
         _send_channel(chat_id, dry_run=dry_run)
-        return
+        return live_pool
 
     if data.startswith("gmp:"):
         try:
             val = float(data.split(":", 1)[1])
         except ValueError:
             notify.answer_callback(callback_query_id, text="Invalid GMP", dry_run=dry_run)
-            return
+            return live_pool
         state.update_user(chat_id, min_gmp_pct=val)
-        toast = f"Min GMP set to {val:g}%"
-        notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
+        notify.answer_callback(
+            callback_query_id, text=f"Min GMP set to {val:g}%", dry_run=dry_run
+        )
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
-        return
+        return live_pool
 
     if data.startswith("sub:"):
         try:
             val = float(data.split(":", 1)[1])
         except ValueError:
             notify.answer_callback(callback_query_id, text="Invalid sub", dry_run=dry_run)
-            return
+            return live_pool
         state.update_user(chat_id, min_total_sub=val)
-        toast = f"Min subscription set to {val:g}x"
-        notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
+        notify.answer_callback(
+            callback_query_id, text=f"Min subscription set to {val:g}x", dry_run=dry_run
+        )
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
-        return
+        return live_pool
 
     if data.startswith("board:"):
         include = data.split(":", 1)[1].lower() in ("all", "sme")
@@ -332,9 +345,10 @@ def handle_callback(
         toast = "MAIN + SME" if include else "MAIN only"
         notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
-        return
+        return live_pool
 
     notify.answer_callback(callback_query_id, text="Unknown action", dry_run=dry_run)
+    return live_pool
 
 
 def drain_updates(*, dry_run: bool = False) -> int:
@@ -362,6 +376,7 @@ def drain_updates(*, dry_run: bool = False) -> int:
     results = data.get("result") or []
     handled = 0
     max_update = offset
+    live_pool: list[dict[str, Any]] | None = None
     for upd in results:
         uid = upd.get("update_id")
         if uid is not None:
@@ -375,12 +390,13 @@ def drain_updates(*, dry_run: bool = False) -> int:
             if chat_id is None:
                 continue
             try:
-                handle_callback(
+                live_pool = handle_callback(
                     chat_id,
                     cb.get("data") or "",
                     callback_query_id=str(cb.get("id")),
                     message_id=message_id,
                     dry_run=dry_run,
+                    live_pool=live_pool,
                 )
                 handled += 1
             except Exception as exc:  # noqa: BLE001
@@ -396,7 +412,7 @@ def drain_updates(*, dry_run: bool = False) -> int:
         if chat_id is None:
             continue
         try:
-            handle_text(chat_id, text, dry_run=dry_run)
+            live_pool = handle_text(chat_id, text, dry_run=dry_run, live_pool=live_pool)
             handled += 1
         except Exception as exc:  # noqa: BLE001
             log.exception("Failed handling update from %s: %s", chat_id, exc)
