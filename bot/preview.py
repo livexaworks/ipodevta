@@ -117,5 +117,5 @@ def build_preview(
 
 
 def load_live_preview_pool(limit: int = 5) -> list[dict[str, Any]]:
-    """Fetch once per drain — shared across many Preview button taps."""
+    """Fetch once per drain - shared across many Preview button taps."""
     return _live_fallback(limit)

@@ -3,13 +3,21 @@ on:
   schedule:
     - cron: "55 5 * * 1-5"    # 10:55 IST, alert mode (weekdays)
     - cron: "45 11 * * 1-5"   # 17:15 IST, snapshot mode (weekdays)
-    - cron: "*/20 * * * *"    # every 20 min, command / button replies
+    # Fallback poll if webhook is not configured. With TELEGRAM_WEBHOOK=1 this
+    # job no-ops quickly (getUpdates skipped).
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       mode:
         type: choice
-        options: [snapshot, alert, dry-run, commands]
-        default: commands
+        options: [snapshot, alert, dry-run, commands, preview]
+        default: dry-run
+      chat_id:
+        description: "Chat id for preview mode"
+        required: false
+        default: ""
+  repository_dispatch:
+    types: [preview]
 
 concurrency:
   group: ipo-scan
@@ -32,8 +40,12 @@ jobs:
       - name: Pick mode
         id: m
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "mode=preview" >> $GITHUB_OUTPUT
+            echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
+            echo "chat_id=${{ inputs.chat_id }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "55 5 * * 1-5" ]; then
             echo "mode=alert" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "45 11 * * 1-5" ]; then
@@ -41,11 +53,21 @@ jobs:
           else
             echo "mode=commands" >> $GITHUB_OUTPUT
           fi
-      - run: python -m bot.run --mode ${{ steps.m.outputs.mode }}
+      - name: Run bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHANNEL_ID:     ${{ secrets.CHANNEL_ID }}
           ADMIN_CHAT_ID:  ${{ secrets.ADMIN_CHAT_ID }}
+          TELEGRAM_WEBHOOK: ${{ secrets.TELEGRAM_WEBHOOK }}
+          WEBHOOK_BASE_URL: ${{ secrets.WEBHOOK_BASE_URL }}
+          EXPORT_SECRET: ${{ secrets.EXPORT_SECRET }}
+          PREVIEW_CHAT_ID: ${{ steps.m.outputs.chat_id }}
+        run: |
+          if [ "${{ steps.m.outputs.mode }}" = "preview" ]; then
+            python -m bot.run --mode preview --chat-id "${{ steps.m.outputs.chat_id }}"
+          else
+            python -m bot.run --mode ${{ steps.m.outputs.mode }}
+          fi
       - name: Commit state
         if: always()
         run: |

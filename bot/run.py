@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import traceback
 from typing import Any
@@ -16,7 +17,7 @@ log = logging.getLogger(__name__)
 
 
 class AbortBroadcast(Exception):
-    """Fatal data problem — alert admin, send nothing to channel/users."""
+    """Fatal data problem - alert admin, send nothing to channel/users."""
 
 
 def _history_for(snapshots: list[dict[str, Any]], ipo_id: str) -> list[dict[str, Any]]:
@@ -103,7 +104,7 @@ def collect(*, require_gmp_sources: int) -> tuple[list[dict[str, Any]], list[str
             f"({len(ok_sources)} ok). {detail}"
         )
     if errors:
-        # partial success still OK if enough sources — admin note
+        # partial success still OK if enough sources - admin note
         log.warning("Some GMP sources failed: %s", errors)
 
     enriched, unmatched = match.join_gmp_to_ipos(live_ipos, quotes)
@@ -113,7 +114,7 @@ def collect(*, require_gmp_sources: int) -> tuple[list[dict[str, Any]], list[str
     return enriched, warnings
 
 
-def run(mode: str) -> int:
+def run(mode: str, *, preview_chat_id: str | None = None) -> int:
     dry_run = mode == "dry-run"
     alert = mode in ("alert", "dry-run")
     # dry-run behaves like alert for building messages, but sends nothing
@@ -124,6 +125,7 @@ def run(mode: str) -> int:
     ts = config.format_ist()
 
     # Always drain user commands first (replies are never dry-run)
+    # Skipped automatically when TELEGRAM_WEBHOOK / WEBHOOK_BASE_URL is set.
     try:
         n = users.drain_updates(dry_run=False)
         log.info("Processed %d Telegram updates", n)
@@ -132,6 +134,27 @@ def run(mode: str) -> int:
 
     if mode == "commands":
         log.info("Commands-only mode complete.")
+        return 0
+
+    if mode == "preview":
+        chat_id = preview_chat_id or os.environ.get("PREVIEW_CHAT_ID", "").strip()
+        if not chat_id:
+            log.error("preview mode requires PREVIEW_CHAT_ID")
+            return 1
+        prefs = state.get_or_create_user(chat_id)
+        from bot import preview, keyboards
+
+        source, items = preview.build_preview(prefs, limit=5)
+        text = render.render_preview(prefs, source, items)
+        if len(text) > 4000:
+            text = text[:3900] + "\n\n…truncated."
+        notify.send_message(
+            chat_id,
+            text,
+            reply_markup=keyboards.home_inline(),
+            dry_run=False,
+        )
+        log.info("Preview sent to %s (%s, %d items)", chat_id, source, len(items))
         return 0
 
     try:
@@ -182,13 +205,13 @@ def run(mode: str) -> int:
         state.mark_channel_sent(today, [c["ipo_id"] for c in closing])
         log.info("Channel post sent (%d IPOs)", len(closing))
     else:
-        log.info("Channel already sent for %s — skip", today)
+        log.info("Channel already sent for %s - skip", today)
 
     # Personalized DMs
     user_map = state.load_users()
     for chat_id, prefs in user_map.items():
         if not dry_run and state.user_already_sent(today, chat_id):
-            log.info("User %s already sent for %s — skip", chat_id, today)
+            log.info("User %s already sent for %s - skip", chat_id, today)
             continue
 
         items = []
@@ -227,8 +250,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="IPO GMP screening bot")
     parser.add_argument(
         "--mode",
-        choices=("snapshot", "alert", "dry-run", "commands"),
+        choices=("snapshot", "alert", "dry-run", "commands", "preview"),
         required=True,
+    )
+    parser.add_argument(
+        "--chat-id",
+        default=None,
+        help="Target chat for --mode preview",
     )
     args = parser.parse_args(argv)
 
@@ -239,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     config.load_dotenv()
 
     try:
-        return run(args.mode)
+        return run(args.mode, preview_chat_id=args.chat_id)
     except Exception as exc:  # noqa: BLE001
         tb = traceback.format_exc()
         log.error("Unhandled: %s\n%s", exc, tb)

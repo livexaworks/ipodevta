@@ -1,4 +1,4 @@
-"""Drain Telegram updates — button-first UX with optional slash shortcuts."""
+"""Drain Telegram updates - button-first UX with optional slash shortcuts."""
 
 from __future__ import annotations
 
@@ -72,13 +72,13 @@ def ensure_bot_commands() -> None:
     except Exception as exc:  # noqa: BLE001
         log.warning("setMyCommands failed: %s", exc)
 
-    short = "IPO fill assistant — personalized GMP & subscription filters"
+    short = "IPO fill assistant - personalized GMP & subscription filters"
     about = (
         "IPO Devta helps you decide what to file on closing days.\n\n"
         "Personalized 👍 / 👎 views from your GMP, subscription, and board "
         "filters. Preview the last five processed issues anytime.\n\n"
         "Prefer a shared feed? Join the public channel. "
-        "Information only — not investment advice."
+        "Information only - not investment advice."
     )
     for method, payload in (
         ("setMyShortDescription", {"short_description": short[:120]}),
@@ -168,7 +168,7 @@ def _send_channel(chat_id: int | str, *, dry_run: bool) -> None:
         chat_id,
         (
             "<b>Public channel</b>\n\n"
-            "Daily closing-day GMP feed — no personal filters.\n"
+            "Daily closing-day GMP feed - no personal filters.\n"
             "Useful if you want reminders without DMs.\n\n"
             f'<a href="{url}">Join {url.replace("https://t.me/", "@")}</a>'
         ),
@@ -269,7 +269,7 @@ def handle_text(
 
     notify.send_message(
         chat_id,
-        "Use the buttons below — Preview GMP, Settings, Help, or Channel.",
+        "Use the buttons below - Preview GMP, Settings, Help, or Channel.",
         reply_markup=keyboards.main_reply_keyboard(),
         dry_run=dry_run,
     )
@@ -353,8 +353,12 @@ def handle_callback(
 
 def drain_updates(*, dry_run: bool = False) -> int:
     """Process queued Telegram updates. Returns number handled."""
+    if config.webhook_mode():
+        log.info("Telegram webhook mode on - skip getUpdates polling")
+        return 0
+
     if not config.telegram_token():
-        log.warning("TELEGRAM_TOKEN unset — skip getUpdates")
+        log.warning("TELEGRAM_TOKEN unset - skip getUpdates")
         return 0
 
     ensure_bot_commands()

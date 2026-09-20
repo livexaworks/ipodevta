@@ -1,4 +1,4 @@
-"""Gate evaluation — prior-day subscription, not live 11:00 QIB."""
+"""Gate evaluation - prior-day subscription, not live 11:00 QIB."""
 
 from bot import score
 

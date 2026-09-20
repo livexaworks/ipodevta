@@ -5,7 +5,7 @@ Run:  python -m bot.discover
 
 Writes fixtures/bse_live.json and fixtures/bse_catdem_<id>.json,
 prints structure + flattened key paths, then exits.
-Do not invent BSE field names — paste this output back before writing bse.py parsers.
+Do not invent BSE field names - paste this output back before writing bse.py parsers.
 """
 
 from __future__ import annotations

@@ -1,0 +1,16 @@
+name = "ipo-devta-bot"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[[kv_namespaces]]
+binding = "PREFS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Set secrets via:
+#   wrangler secret put TELEGRAM_TOKEN
+#   wrangler secret put CHANNEL_ID
+#   wrangler secret put WEBHOOK_SECRET
+#   wrangler secret put EXPORT_SECRET
+#   wrangler secret put GITHUB_TOKEN
+#   wrangler secret put GITHUB_REPO
