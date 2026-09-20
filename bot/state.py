@@ -110,14 +110,20 @@ def mark_user_sent(date: str, chat_id: str | int, ipo_ids: list[str]) -> None:
     save_sent(sent)
 
 
+def load_users_file() -> dict[str, Any]:
+    data = _read(config.USERS_PATH, {})
+    if not isinstance(data, dict):
+        raise ValueError("users.json must be an object")
+    return data
+
+
 def load_users() -> dict[str, Any]:
-    """Prefer live webhook prefs (instant Settings), else data/users.json."""
+    """Prefer live webhook prefs for alerts; else data/users.json."""
     try:
         from bot import webhook_users
 
         remote = webhook_users.fetch_users()
         if remote is not None:
-            # Keep a local mirror so the repo still has a backup after alerts
             try:
                 save_users(remote)
             except Exception as exc:  # noqa: BLE001
@@ -126,10 +132,7 @@ def load_users() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         log.warning("webhook user load skipped: %s", exc)
 
-    data = _read(config.USERS_PATH, {})
-    if not isinstance(data, dict):
-        raise ValueError("users.json must be an object")
-    return data
+    return load_users_file()
 
 
 def save_users(data: dict[str, Any]) -> None:
@@ -146,8 +149,18 @@ def default_prefs() -> dict[str, Any]:
 
 
 def get_or_create_user(chat_id: str | int) -> dict[str, Any]:
-    users = load_users()
     key = str(chat_id)
+    # Read path: webhook (if configured) so Preview/alert see live Settings
+    try:
+        from bot import webhook_users
+
+        remote = webhook_users.fetch_users()
+        if remote is not None and key in remote:
+            return remote[key]
+    except Exception:  # noqa: BLE001
+        pass
+
+    users = load_users_file()
     if key not in users:
         users[key] = default_prefs()
         save_users(users)
@@ -155,7 +168,8 @@ def get_or_create_user(chat_id: str | int) -> dict[str, Any]:
 
 
 def update_user(chat_id: str | int, **fields: Any) -> dict[str, Any]:
-    users = load_users()
+    """Local file update (tests / legacy). Live Settings are owned by the Worker."""
+    users = load_users_file()
     key = str(chat_id)
     prefs = users.get(key) or default_prefs()
     prefs.update(fields)
