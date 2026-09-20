@@ -1,0 +1,110 @@
+{
+  "ts": 1789903404.9761772,
+  "saved_at": "2026-09-20T16:53:24+05:30",
+  "ipos": [
+    {
+      "ipo_no": "7977",
+      "scrip_cd": 4827,
+      "name": "NATIONAL STOCK EXCHANGE OF INDIA LIMITED",
+      "board": "MAIN",
+      "price_high": 1785.0,
+      "close_date": "2026-09-21",
+      "lot_size": null,
+      "raw": {
+        "Scrip_cd": 4827,
+        "Scrip_Name": "NATIONAL STOCK EXCHANGE OF INDIA LIMITED",
+        "short_name": null,
+        "Start_Dt": "2026-09-17T00:00:00",
+        "End_Dt": "2026-09-21T00:00:00",
+        "Price_Band": "1700.00 - 1785.00",
+        "Face_Val": 1.0,
+        "IR_flag": "IPO",
+        "IR_FLAG_FULL": "IPO",
+        "Status": "L",
+        "eXCHANGE_PLATFORM": "MainBoard",
+        "FLAG": 1,
+        "IPO_NO": 7977,
+        "Is_retailertype": 1,
+        "Cum_Shares_BuyBack": null,
+        "RN": 1,
+        "LONG_NAME": null
+      },
+      "sub_qib": 1.3021,
+      "sub_nii": 0.372,
+      "sub_retail": 0.2047,
+      "sub_total": 0.5537,
+      "ipo_id": "national stock exchange",
+      "gmp_quotes": [
+        {
+          "source": "ipowatch",
+          "raw_name": "NSE",
+          "gmp": 90.0,
+          "price_hint": 1785.0
+        },
+        {
+          "source": "ipocentral",
+          "raw_name": "National Stock Exchange",
+          "gmp": 49.0,
+          "price_hint": null
+        }
+      ],
+      "gmp": 69.5,
+      "gmp_pct": 3.89,
+      "n_sources": 2,
+      "spread_pct": 59.0,
+      "confidence": "low"
+    },
+    {
+      "ipo_no": "7973",
+      "scrip_cd": 4824,
+      "name": "SONASELECTION INDIA LIMITED",
+      "board": "MAIN",
+      "price_high": 99.0,
+      "close_date": "2026-09-21",
+      "lot_size": null,
+      "raw": {
+        "Scrip_cd": 4824,
+        "Scrip_Name": "SONASELECTION INDIA LIMITED",
+        "short_name": null,
+        "Start_Dt": "2026-09-17T00:00:00",
+        "End_Dt": "2026-09-21T00:00:00",
+        "Price_Band": "94.00 - 99.00",
+        "Face_Val": 10.0,
+        "IR_flag": "IPO",
+        "IR_FLAG_FULL": "IPO",
+        "Status": "L",
+        "eXCHANGE_PLATFORM": "MainBoard",
+        "FLAG": 1,
+        "IPO_NO": 7973,
+        "Is_retailertype": 1,
+        "Cum_Shares_BuyBack": null,
+        "RN": 1,
+        "LONG_NAME": null
+      },
+      "sub_qib": 0.0,
+      "sub_nii": 0.0762,
+      "sub_retail": 0.4031,
+      "sub_total": 0.2179,
+      "ipo_id": "sonaselection",
+      "gmp_quotes": [
+        {
+          "source": "ipowatch",
+          "raw_name": "Sonaselection India",
+          "gmp": 2.0,
+          "price_hint": 99.0
+        },
+        {
+          "source": "ipocentral",
+          "raw_name": "SonaSelection India",
+          "gmp": 2.0,
+          "price_hint": null
+        }
+      ],
+      "gmp": 2.0,
+      "gmp_pct": 2.02,
+      "n_sources": 2,
+      "spread_pct": 0.0,
+      "confidence": "medium"
+    }
+  ]
+}
