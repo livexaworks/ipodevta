@@ -1,1 +1,56 @@
-{}
+{
+  "2026-09-21": {
+    "ts": "2026-09-21T16:40:06+05:30",
+    "channel": {
+      "ts": "2026-09-21T16:40:02+05:30",
+      "ipo_ids": [
+        "sonaselection",
+        "national stock exchange"
+      ]
+    },
+    "users": {
+      "715106436": {
+        "ts": "2026-09-21T16:40:04+05:30",
+        "ipo_ids": [
+          "sonaselection",
+          "national stock exchange"
+        ]
+      },
+      "987156126": {
+        "ts": "2026-09-21T16:40:04+05:30",
+        "ipo_ids": [
+          "sonaselection",
+          "national stock exchange"
+        ]
+      },
+      "1645772786": {
+        "ts": "2026-09-21T16:40:05+05:30",
+        "ipo_ids": [
+          "sonaselection",
+          "national stock exchange"
+        ]
+      },
+      "5689589858": {
+        "ts": "2026-09-21T16:40:05+05:30",
+        "ipo_ids": [
+          "sonaselection",
+          "national stock exchange"
+        ]
+      },
+      "8676076099": {
+        "ts": "2026-09-21T16:40:06+05:30",
+        "ipo_ids": [
+          "sonaselection",
+          "national stock exchange"
+        ]
+      },
+      "6536587326": {
+        "ts": "2026-09-21T16:40:06+05:30",
+        "ipo_ids": [
+          "sonaselection",
+          "national stock exchange"
+        ]
+      }
+    }
+  }
+}

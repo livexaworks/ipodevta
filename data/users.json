@@ -1,4 +1,16 @@
 {
+  "715106436": {
+    "min_gmp_pct": 24,
+    "min_total_sub": 1,
+    "include_sme": false,
+    "updated": "2026-09-20T15:14:42.389Z"
+  },
+  "987156126": {
+    "min_gmp_pct": 24,
+    "min_total_sub": 1,
+    "include_sme": false,
+    "updated": "2026-09-21T04:38:55.596Z"
+  },
   "1645772786": {
     "min_gmp_pct": 24,
     "min_total_sub": 1,
@@ -10,5 +22,17 @@
     "min_total_sub": 1,
     "include_sme": false,
     "updated": "2026-09-20T13:04:08+05:30"
+  },
+  "8676076099": {
+    "min_gmp_pct": 24,
+    "min_total_sub": 1,
+    "include_sme": false,
+    "updated": "2026-09-21T02:59:06.428Z"
+  },
+  "6536587326": {
+    "min_gmp_pct": 24,
+    "min_total_sub": 1,
+    "include_sme": false,
+    "updated": "2026-09-21T05:29:35.937Z"
   }
 }
