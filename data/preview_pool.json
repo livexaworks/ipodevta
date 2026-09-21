@@ -1,6 +1,6 @@
 {
-  "ts": 1789903404.9761772,
-  "saved_at": "2026-09-20T16:53:24+05:30",
+  "ts": 1789959597.135657,
+  "saved_at": "2026-09-21T08:29:57+05:30",
   "ipos": [
     {
       "ipo_no": "7977",
@@ -38,7 +38,7 @@
         {
           "source": "ipowatch",
           "raw_name": "NSE",
-          "gmp": 90.0,
+          "gmp": 48.0,
           "price_hint": 1785.0
         },
         {
@@ -48,11 +48,11 @@
           "price_hint": null
         }
       ],
-      "gmp": 69.5,
-      "gmp_pct": 3.89,
+      "gmp": 48.5,
+      "gmp_pct": 2.72,
       "n_sources": 2,
-      "spread_pct": 59.0,
-      "confidence": "low"
+      "spread_pct": 2.1,
+      "confidence": "medium"
     },
     {
       "ipo_no": "7973",
@@ -90,7 +90,7 @@
         {
           "source": "ipowatch",
           "raw_name": "Sonaselection India",
-          "gmp": 2.0,
+          "gmp": 0.0,
           "price_hint": 99.0
         },
         {
@@ -100,11 +100,149 @@
           "price_hint": null
         }
       ],
-      "gmp": 2.0,
-      "gmp_pct": 2.02,
+      "gmp": 1.0,
+      "gmp_pct": 1.01,
       "n_sources": 2,
+      "spread_pct": 200.0,
+      "confidence": "low"
+    },
+    {
+      "ipo_no": "7980",
+      "scrip_cd": 4831,
+      "name": "FX MULTITECH LIMITED",
+      "board": "SME",
+      "price_high": 116.0,
+      "close_date": "2026-09-23",
+      "lot_size": null,
+      "raw": {
+        "Scrip_cd": 4831,
+        "Scrip_Name": "FX MULTITECH LIMITED",
+        "short_name": null,
+        "Start_Dt": "2026-09-21T00:00:00",
+        "End_Dt": "2026-09-23T00:00:00",
+        "Price_Band": "110.00 - 116.00",
+        "Face_Val": 10.0,
+        "IR_flag": "IPO",
+        "IR_FLAG_FULL": "IPO",
+        "Status": "L",
+        "eXCHANGE_PLATFORM": "SME",
+        "FLAG": 1,
+        "IPO_NO": 7980,
+        "Is_retailertype": 1,
+        "Cum_Shares_BuyBack": null,
+        "RN": 1,
+        "LONG_NAME": null
+      },
+      "sub_qib": 0.0,
+      "sub_nii": 0.0,
+      "sub_retail": 0.0,
+      "sub_total": 0.0,
+      "ipo_id": "fx multitech",
+      "gmp_quotes": [
+        {
+          "source": "ipowatch",
+          "raw_name": "FX Multitech",
+          "gmp": 0.0,
+          "price_hint": 116.0
+        }
+      ],
+      "gmp": 0.0,
+      "gmp_pct": 0.0,
+      "n_sources": 1,
       "spread_pct": 0.0,
-      "confidence": "medium"
+      "confidence": "low"
+    },
+    {
+      "ipo_no": "7982",
+      "scrip_cd": 4833,
+      "name": "ROBOKIDZ EDUVENTURES LIMITED",
+      "board": "SME",
+      "price_high": 106.0,
+      "close_date": "2026-09-23",
+      "lot_size": null,
+      "raw": {
+        "Scrip_cd": 4833,
+        "Scrip_Name": "ROBOKIDZ EDUVENTURES LIMITED",
+        "short_name": null,
+        "Start_Dt": "2026-09-21T00:00:00",
+        "End_Dt": "2026-09-23T00:00:00",
+        "Price_Band": "100.00 - 106.00",
+        "Face_Val": 10.0,
+        "IR_flag": "IPO",
+        "IR_FLAG_FULL": "IPO",
+        "Status": "L",
+        "eXCHANGE_PLATFORM": "SME",
+        "FLAG": 1,
+        "IPO_NO": 7982,
+        "Is_retailertype": 1,
+        "Cum_Shares_BuyBack": null,
+        "RN": 1,
+        "LONG_NAME": null
+      },
+      "sub_qib": 0.0,
+      "sub_nii": 0.0,
+      "sub_retail": 0.0,
+      "sub_total": 0.0,
+      "ipo_id": "robokidz eduventures",
+      "gmp_quotes": [
+        {
+          "source": "ipowatch",
+          "raw_name": "Robokidz Eduventures",
+          "gmp": 51.0,
+          "price_hint": 106.0
+        }
+      ],
+      "gmp": 51.0,
+      "gmp_pct": 48.11,
+      "n_sources": 1,
+      "spread_pct": 0.0,
+      "confidence": "low"
+    },
+    {
+      "ipo_no": "7981",
+      "scrip_cd": 4832,
+      "name": "Vivekanand Cotspin Limited",
+      "board": "SME",
+      "price_high": 37.0,
+      "close_date": "2026-09-23",
+      "lot_size": null,
+      "raw": {
+        "Scrip_cd": 4832,
+        "Scrip_Name": "Vivekanand Cotspin Limited",
+        "short_name": null,
+        "Start_Dt": "2026-09-21T00:00:00",
+        "End_Dt": "2026-09-23T00:00:00",
+        "Price_Band": "35.00 - 37.00",
+        "Face_Val": 10.0,
+        "IR_flag": "IPO",
+        "IR_FLAG_FULL": "IPO",
+        "Status": "L",
+        "eXCHANGE_PLATFORM": "SME",
+        "FLAG": 1,
+        "IPO_NO": 7981,
+        "Is_retailertype": 1,
+        "Cum_Shares_BuyBack": null,
+        "RN": 1,
+        "LONG_NAME": null
+      },
+      "sub_qib": 0.0,
+      "sub_nii": 0.0,
+      "sub_retail": 0.0,
+      "sub_total": 0.0,
+      "ipo_id": "vivekanand cotspin",
+      "gmp_quotes": [
+        {
+          "source": "ipowatch",
+          "raw_name": "Vivekanand Cotspin",
+          "gmp": 0.0,
+          "price_hint": 37.0
+        }
+      ],
+      "gmp": 0.0,
+      "gmp_pct": 0.0,
+      "n_sources": 1,
+      "spread_pct": 0.0,
+      "confidence": "low"
     }
   ]
 }
