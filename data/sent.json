@@ -52,5 +52,66 @@
         ]
       }
     }
+  },
+  "2026-09-23": {
+    "ts": "2026-09-23T15:49:26+05:30",
+    "channel": {
+      "ts": "2026-09-23T15:49:22+05:30",
+      "ipo_ids": [
+        "vivekanand cotspin",
+        "robokidz eduventures",
+        "fx multitech"
+      ]
+    },
+    "users": {
+      "715106436": {
+        "ts": "2026-09-23T15:49:23+05:30",
+        "ipo_ids": [
+          "vivekanand cotspin",
+          "robokidz eduventures",
+          "fx multitech"
+        ]
+      },
+      "987156126": {
+        "ts": "2026-09-23T15:49:24+05:30",
+        "ipo_ids": [
+          "vivekanand cotspin",
+          "robokidz eduventures",
+          "fx multitech"
+        ]
+      },
+      "1645772786": {
+        "ts": "2026-09-23T15:49:24+05:30",
+        "ipo_ids": [
+          "vivekanand cotspin",
+          "robokidz eduventures",
+          "fx multitech"
+        ]
+      },
+      "5689589858": {
+        "ts": "2026-09-23T15:49:25+05:30",
+        "ipo_ids": [
+          "vivekanand cotspin",
+          "robokidz eduventures",
+          "fx multitech"
+        ]
+      },
+      "8676076099": {
+        "ts": "2026-09-23T15:49:25+05:30",
+        "ipo_ids": [
+          "vivekanand cotspin",
+          "robokidz eduventures",
+          "fx multitech"
+        ]
+      },
+      "6536587326": {
+        "ts": "2026-09-23T15:49:26+05:30",
+        "ipo_ids": [
+          "vivekanand cotspin",
+          "robokidz eduventures",
+          "fx multitech"
+        ]
+      }
+    }
   }
 }
