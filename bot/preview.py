@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from bot import match, score, state
-from bot.sources import bse, gmp
+from bot import score, state
+from bot.sources import ipoguru
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +46,11 @@ def _latest_unique_snapshots(limit: int) -> list[dict[str, Any]]:
 
 
 def _live_fallback(limit: int) -> list[dict[str, Any]]:
-    """When no snapshots exist yet, score currently open issues."""
+    """
+    When no snapshots exist yet, reuse the IPO Guru disk cache.
+
+    Never hits the network — free plan allows only a few scheduled fetches/day.
+    """
     cached = None
     try:
         from bot import preview_cache
@@ -58,20 +62,13 @@ def _live_fallback(limit: int) -> list[dict[str, Any]]:
         return cached
 
     try:
-        live_ipos = bse.load_live_ipos()
+        pool = ipoguru.fetch_open_ipos(allow_network=False)
     except Exception as exc:  # noqa: BLE001
-        log.warning("preview live BSE failed: %s", exc)
+        log.warning("preview IPO Guru cache unavailable: %s", exc)
         return []
-    quotes, errors = gmp.fetch_all_gmp()
-    if errors:
-        log.warning("preview GMP partial: %s", errors)
-    enriched, _ = match.join_gmp_to_ipos(live_ipos, quotes)
-    for ipo in enriched:
-        cons = gmp.consolidate(ipo.get("gmp_quotes") or [], ipo.get("price_high"))
-        if cons:
-            ipo.update(cons)
-    enriched.sort(key=lambda r: (r.get("close_date") or "9999", r.get("name") or ""))
-    pool = enriched[: max(limit, 5)]
+
+    pool = sorted(pool, key=lambda r: (r.get("close_date") or "9999", r.get("name") or ""))
+    pool = pool[: max(limit, 5)]
     try:
         from bot import preview_cache
 
@@ -133,5 +130,5 @@ def build_preview(
 
 
 def load_live_preview_pool(limit: int = 5) -> list[dict[str, Any]]:
-    """Fetch once per drain - shared across many Preview button taps."""
+    """Reuse disk cache only — shared across many Preview button taps."""
     return _live_fallback(limit)

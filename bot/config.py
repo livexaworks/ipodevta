@@ -18,6 +18,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 REPO_URL = "https://github.com/weblrsolutions/ipodevta"
 USER_AGENT = f"IPOGmpBot/1.0 (+{REPO_URL}) personal-use"
 
+# BSE public bookbuilding APIs (category subscription only — not scraped HTML).
 BSE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -32,10 +33,6 @@ BSE_LIVE = (
     "https://api.bseindia.com/BseIndiaAPI/api/GetPublicIssue_par_updated/w"
     "?flag=1&status=L"
 )
-BSE_UPCOMING = (
-    "https://api.bseindia.com/BseIndiaAPI/api/GetPublicIssue_par_updated/w"
-    "?flag=1&status=F"
-)
 BSE_CATDEM = (
     "https://api.bseindia.com/BseIndiaAPI/api/"
     "Pubissues_GetBkbldgCatdem_PAR_ng/w?IPO_NO={ipo_no}"
@@ -44,12 +41,6 @@ BSE_CATDEM_NEW = (
     "https://api.bseindia.com/BseIndiaAPI/api/"
     "Pubissues_GetBkbldgCatdem_PAR_bbnew_ng/w?IPO_NO={ipo_no}"
 )
-
-GMP_URLS = {
-    "investorgain": "https://www.investorgain.com/report/ipo-gmp-live/331/",
-    "ipowatch": "https://ipowatch.in/ipo-grey-market-premium-latest-ipo-gmp/",
-    "ipocentral": "https://ipocentral.in/ipo-discussion/",
-}
 
 # Default gates (used when a user has not customized).
 # Mainboard and SME have separate GMP triggers.
