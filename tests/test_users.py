@@ -7,7 +7,10 @@ def test_default_prefs(tmp_path, monkeypatch):
     monkeypatch.setattr(state.config, "USERS_PATH", tmp_path / "users.json")
     monkeypatch.setattr("bot.webhook_users.fetch_users", lambda: None)
     prefs = state.get_or_create_user(12345)
-    assert prefs["min_gmp_pct"] == 24.0
+    assert prefs["min_gmp_main"] == 34.0
+    assert prefs["min_gmp_sme"] == 48.0
+    assert prefs["min_gmp_pct"] == 34.0
+    assert prefs["board"] == "main"
     assert prefs["include_sme"] is False
     updated = state.update_user(12345, min_gmp_pct=30.0, include_sme=True)
     assert updated["min_gmp_pct"] == 30.0

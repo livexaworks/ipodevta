@@ -51,8 +51,11 @@ GMP_URLS = {
     "ipocentral": "https://ipocentral.in/ipo-discussion/",
 }
 
-# Default gates (used when a user has not customized)
-MIN_GMP_PCT = 24.0
+# Default gates (used when a user has not customized).
+# Mainboard and SME have separate GMP triggers.
+MIN_GMP_MAIN = 34.0
+MIN_GMP_SME = 48.0
+MIN_GMP_PCT = MIN_GMP_MAIN  # legacy alias: mainboard bar
 MIN_TOTAL_SUB = 1.0
 MIN_CONFIDENCE = "medium"
 INCLUDE_SME = False

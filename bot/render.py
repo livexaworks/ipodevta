@@ -3,18 +3,28 @@
 from __future__ import annotations
 
 import html
+from collections import OrderedDict
 from datetime import datetime
 from typing import Any
 
 from bot import keyboards, score as score_mod
+from bot.prefs import board_mode, gmp_main, gmp_sme
+
+TELEGRAM_MAX_LEN = 4096
 
 DISCLAIMER = (
-    "<i>Grey-market premium is unofficial and can move quickly.\n"
-    "Information only - not investment advice. Read the RHP.</i>"
+    "<blockquote expandable>"
+    "Grey-market premium is unofficial and can move quickly.\n"
+    "Information only - not investment advice. Read the RHP."
+    "</blockquote>"
 )
 
+# Kept for worker/JS parity and older call sites; delivery messages use blank lines.
 RULE = "────────────"
 TREND_ARROW = {"rising": "↗", "falling": "↘", "flat": "→"}
+
+# Tokens kept ALL CAPS after .title() normalisation (e.g. "FX Parts").
+NAME_CASE_EXCEPTIONS = frozenset({"FX", "NSE", "BSE", "SME", "IPO", "QIB", "NII", "AI", "IT"})
 
 # Bot profile copy (setMyShortDescription / setMyDescription)
 SHORT_DESCRIPTION = (
@@ -65,6 +75,23 @@ def _short_name(name: str) -> str:
     return " ".join(parts) if parts else name
 
 
+def display_name(name: str) -> str:
+    """Title-case company names; keep a small ALL-CAPS exception list."""
+    short = _short_name(str(name))
+    words: list[str] = []
+    for word in short.title().split():
+        if word.upper() in NAME_CASE_EXCEPTIONS:
+            words.append(word.upper())
+        else:
+            words.append(word)
+    return " ".join(words) if words else short
+
+
+def _ipo_label(ipo: dict[str, Any]) -> str:
+    raw = ipo.get("name") or ipo.get("ipo_id") or "?"
+    return esc(display_name(str(raw)))
+
+
 def _date_heading(date_iso: str) -> str:
     try:
         d = datetime.strptime(date_iso, "%Y-%m-%d")
@@ -88,11 +115,25 @@ def _lot_line(ipo: dict[str, Any]) -> str | None:
 
 
 def prefs_summary(prefs: dict[str, Any]) -> str:
-    board = "MAIN + SME" if prefs.get("include_sme") else "MAIN only"
+    mode = board_mode(prefs)
+    sub = _fmt_num(prefs.get("min_total_sub"), suffix="x")
+    if mode == "sme":
+        return (
+            f"Board       SME\n"
+            f"GMP         {_fmt_num(gmp_sme(prefs), suffix='%')}\n"
+            f"Sub         {sub}"
+        )
+    if mode == "both":
+        return (
+            f"Board       Mainboard + SME\n"
+            f"Main GMP    {_fmt_num(gmp_main(prefs), suffix='%')}\n"
+            f"SME GMP     {_fmt_num(gmp_sme(prefs), suffix='%')}\n"
+            f"Sub         {sub}"
+        )
     return (
-        f"GMP min     {_fmt_num(prefs.get('min_gmp_pct'), suffix='%')}\n"
-        f"Sub min     {_fmt_num(prefs.get('min_total_sub'), suffix='x')}\n"
-        f"Board       {board}"
+        f"Board       Mainboard\n"
+        f"GMP         {_fmt_num(gmp_main(prefs), suffix='%')}\n"
+        f"Sub         {sub}"
     )
 
 
@@ -109,12 +150,9 @@ def channel_invite_text() -> str:
             "",
             "No personal filters here.",
             "",
-            "On closing days this channel posts the GMP picture for issues "
-            "closing that day. If you only want to know where GMP stands "
-            "on the last day, this is the place. It will keep posting that "
-            "update in channel form.",
-            "",
-            RULE,
+            "Once a day this channel posts a short GMP and subscription list "
+            "for the issues in the market. No personal filters. One post, "
+            "then it stays quiet until the next day.",
             "",
             f'<a href="{channel}">Join {handle}</a>',
             "",
@@ -137,8 +175,6 @@ def welcome_text(prefs: dict[str, Any]) -> str:
             "",
             prefs_block(prefs),
             "",
-            RULE,
-            "",
             "Use the buttons below. No typing needed.",
             "",
             f'Want closing-day GMP with no filters? <a href="{channel}">Join the public channel</a>',
@@ -160,15 +196,13 @@ def help_text() -> str:
             "Recent issues with your filters applied.",
             "",
             "<b>Settings</b>",
-            "Your GMP %, subscription floor, and board.",
+            "Mainboard GMP, SME GMP, subscription floor, and which boards to include.",
             "",
             "<b>Channel</b>",
-            "Closing-day GMP updates with no personal filters.",
+            "One daily GMP list for every issue in the market. No personal filters.",
             "",
             "<b>Feedback</b>",
             "Send a short note to the team.",
-            "",
-            RULE,
             "",
             f'<a href="{channel}">Open the public channel</a>',
             "",
@@ -178,14 +212,40 @@ def help_text() -> str:
 
 
 def settings_text(prefs: dict[str, Any]) -> str:
+    mode = board_mode(prefs)
+    if mode == "sme":
+        hint = "SME percentages are below. Subscription is under that."
+    elif mode == "both":
+        hint = "Mainboard percentages come first. SME percentages follow. Subscription is under both."
+    else:
+        hint = "Mainboard percentages are below. Subscription is under that."
     return "\n".join(
         [
             "<b>Settings</b>",
             "",
             prefs_block(prefs),
             "",
-            "Tap a value below to change it.",
-            "Your next Preview and closing-day notes use the new values.",
+            hint,
+            "Tap a percentage, or tap <b>Type %</b> and send a number.",
+            "Preview and closing-day notes use these filters.",
+            "The channel still posts one daily list for everyone.",
+        ]
+    )
+
+
+def gmp_prompt(which: str) -> str:
+    if which == "sme":
+        title = "SME GMP"
+        example = "48"
+    else:
+        title = "Mainboard GMP"
+        example = "34"
+    return "\n".join(
+        [
+            f"<b>{title}</b>",
+            "",
+            f"Send a percentage, for example <code>{example}</code>.",
+            "Type <code>cancel</code> to stop.",
         ]
     )
 
@@ -207,56 +267,37 @@ def render_preview(
     prefs: dict[str, Any],
     source: str,
     items: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
-) -> str:
+) -> list[str]:
     if source == "live":
-        heading = "Preview"
         note = "Open issues scored with your filters."
     else:
-        heading = "Preview"
         note = "Recent issues scored with your filters."
 
+    header = "\n".join(
+        [
+            "<b>Preview</b>",
+            f"<i>{esc(note)}</i>",
+            "",
+            prefs_block(prefs),
+        ]
+    )
     if not items:
-        return "\n".join(
+        body = "\n".join(
             [
-                f"<b>{esc(heading)}</b>",
+                header,
                 "",
                 "Nothing to show yet.",
                 "Check again later.",
-                "",
-                prefs_block(prefs),
             ]
         )
+        return [body]
 
-    ups = [x for x in items if x[1]]
-    downs = [x for x in items if not x[1]]
-    parts = [
-        f"<b>{esc(heading)}</b>",
-        f"<i>{esc(note)}</i>",
-        "",
-        prefs_block(prefs),
-        "",
-        RULE,
-    ]
-    if ups:
-        parts.extend(["", f"<b>Fits your filters · {len(ups)}</b>", ""])
-        for ipo, _ok, _reasons, prev, live in ups:
-            parts.append(render_thumb_up(ipo, prev=prev, live=live))
-            parts.extend(["", RULE, ""])
-    if downs:
-        parts.extend([f"<b>Outside your filters · {len(downs)}</b>", ""])
-        for i, (ipo, _ok, reasons, _prev, _live) in enumerate(downs):
-            parts.append(render_thumb_down(ipo, reasons))
-            if i < len(downs) - 1:
-                parts.append("")
-        parts.append("")
-    parts.append(DISCLAIMER)
-    return "\n".join(parts).strip()
+    return _pack_scored_messages(header, items)
 
 
-def render_thumb_up(
+def render_match_card(
     ipo: dict[str, Any], *, prev: dict[str, Any] | None, live: dict[str, Any] | None
 ) -> str:
-    name = _short_name(ipo.get("name") or ipo.get("ipo_id") or "?")
     trend = score_mod.gmp_trend(ipo.get("history") or [])
     arrow = TREND_ARROW.get(trend, "→")
     gmp = ipo.get("gmp")
@@ -264,10 +305,10 @@ def render_thumb_up(
     gmp_pct = ipo.get("gmp_pct")
 
     lines = [
-        f"👍  <b>{esc(name)}</b>",
+        _ipo_label(ipo),
         "",
         f"GMP          ₹{_fmt_num(gmp)}  on  ₹{_fmt_num(price)}",
-        f"             <b>{_fmt_num(gmp_pct, suffix='%')}</b>  {arrow}",
+        f"             {_fmt_num(gmp_pct, suffix='%')}  {arrow}",
         "",
     ]
     if prev is not None:
@@ -279,7 +320,7 @@ def render_thumb_up(
                     f"NII {_fmt_x(prev.get('sub_nii'))}  ·  "
                     f"Retail {_fmt_x(prev.get('sub_retail'))}"
                 ),
-                f"Total        <b>{_fmt_x(prev.get('sub_total'))}</b>",
+                f"Total        {_fmt_x(prev.get('sub_total'))}",
                 "",
             ]
         )
@@ -293,25 +334,78 @@ def render_thumb_up(
     close = ipo.get("close_date")
     if close:
         lines.append(f"Closes       {esc(_date_heading(str(close)))}")
-    lines.extend(["", "<b>Fits your filters · 👍</b>"])
     return "\n".join(lines)
+
+
+# Back-compat aliases used by older call sites / imports
+def render_thumb_up(
+    ipo: dict[str, Any], *, prev: dict[str, Any] | None, live: dict[str, Any] | None
+) -> str:
+    return render_match_card(ipo, prev=prev, live=live)
 
 
 def render_thumb_down(ipo: dict[str, Any], reasons: list[str]) -> str:
-    name = _short_name(ipo.get("name") or ipo.get("ipo_id") or "?")
     reason = reasons[0] if reasons else "did not pass your filters"
-    gmp_pct = ipo.get("gmp_pct")
-    lines = [
-        f"👎  <b>{esc(name)}</b>",
-        "",
-        f"GMP          {_fmt_num(gmp_pct, suffix='%')}",
-        "",
-        "Why skip",
-        f"<i>{esc(reason)}</i>",
-        "",
-        "<b>Outside your filters · 👎</b>",
-    ]
+    return "\n".join([_ipo_label(ipo), esc(reason)])
+
+
+def _matches_section(
+    ups: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
+) -> str:
+    lines = ["<b>👍 Matches your filters</b>"]
+    if not ups:
+        lines.append("None today")
+        return "\n".join(lines)
+    cards = [render_match_card(ipo, prev=prev, live=live) for ipo, _ok, _r, prev, live in ups]
+    lines.append("")
+    lines.append("\n\n".join(cards))
     return "\n".join(lines)
+
+
+def _skipped_section(
+    downs: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
+) -> str:
+    lines = ["<b>👎 Skipped</b>"]
+    if not downs:
+        lines.append("None today")
+        return "\n".join(lines)
+
+    groups: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
+    for ipo, _ok, reasons, _prev, _live in downs:
+        reason = reasons[0] if reasons else "did not pass your filters"
+        groups.setdefault(reason, []).append(ipo)
+
+    blocks: list[str] = []
+    for reason, ipos in groups.items():
+        block = [esc(reason)]
+        block.extend(_ipo_label(ipo) for ipo in ipos)
+        blocks.append("\n".join(block))
+    lines.append("")
+    lines.append("\n\n".join(blocks))
+    return "\n".join(lines)
+
+
+def _pack_scored_messages(
+    header: str,
+    items: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
+) -> list[str]:
+    ups = [x for x in items if x[1]]
+    downs = [x for x in items if not x[1]]
+    matches = _matches_section(ups)
+    skipped = _skipped_section(downs)
+
+    single = "\n\n".join([header, matches, skipped, DISCLAIMER])
+    if len(single) <= TELEGRAM_MAX_LEN:
+        return [single]
+
+    # Busy day: matches first, skipped second (disclaimer on the last message).
+    first = "\n\n".join([header, matches])
+    second = "\n\n".join([skipped, DISCLAIMER])
+    if len(first) <= TELEGRAM_MAX_LEN and len(second) <= TELEGRAM_MAX_LEN:
+        return [first, second]
+
+    # Extreme overflow: still return the split; callers may truncate further.
+    return [first[: TELEGRAM_MAX_LEN - 20] + "\n\n…truncated.", second[: TELEGRAM_MAX_LEN - 20] + "\n\n…truncated."]
 
 
 def render_dm(
@@ -319,60 +413,67 @@ def render_dm(
     items: list[
         tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]
     ],
-) -> str:
-    ups = [x for x in items if x[1]]
-    downs = [x for x in items if not x[1]]
-    parts = [
-        "<b>Closing today</b>",
-        f"<i>{esc(_date_heading(date_iso))}</i>",
-        "",
-        RULE,
-    ]
-    if ups:
-        parts.extend(["", f"<b>Fits your filters · {len(ups)}</b>", ""])
-        for ipo, _ok, _reasons, prev, live in ups:
-            parts.append(render_thumb_up(ipo, prev=prev, live=live))
-            parts.extend(["", RULE, ""])
-    if downs:
-        parts.extend([f"<b>Outside your filters · {len(downs)}</b>", ""])
-        for i, (ipo, _ok, reasons, _prev, _live) in enumerate(downs):
-            parts.append(render_thumb_down(ipo, reasons))
-            if i < len(downs) - 1:
-                parts.append("")
-        parts.append("")
-    if not ups and not downs:
-        parts.extend(["", "No issues to show.", ""])
-    parts.append(DISCLAIMER)
-    return "\n".join(parts).strip()
+) -> list[str]:
+    header = "\n".join(
+        [
+            "<b>Closing today</b>",
+            f"<i>{esc(_date_heading(date_iso))}</i>",
+        ]
+    )
+    return _pack_scored_messages(header, items)
 
 
-def render_channel(date_iso: str, ipos: list[dict[str, Any]]) -> str:
-    parts = [
-        "<b>Closing today</b>",
-        f"<i>{esc(_date_heading(date_iso))}</i>",
-        "",
-        RULE,
-        "",
-    ]
-    for i, ipo in enumerate(ipos):
-        name = _short_name(ipo.get("name") or "?")
-        board = ipo.get("board") or "n/a"
-        parts.append(f"<b>{esc(name)}</b>  ·  {esc(board)}")
-        parts.append("")
-        parts.append(
-            f"GMP          ₹{_fmt_num(ipo.get('gmp'))}  on  ₹{_fmt_num(ipo.get('price_high'))}"
-        )
-        parts.append(f"             <b>{_fmt_num(ipo.get('gmp_pct'), suffix='%')}</b>")
-        parts.append("")
-        parts.append(
-            f"Subscription  QIB {_fmt_x(ipo.get('sub_qib'))}  ·  "
-            f"NII {_fmt_x(ipo.get('sub_nii'))}  ·  "
-            f"Retail {_fmt_x(ipo.get('sub_retail'))}"
-        )
-        parts.append(f"Total         <b>{_fmt_x(ipo.get('sub_total'))}</b>")
-        if i < len(ipos) - 1:
-            parts.extend(["", RULE, ""])
+def _channel_line(ipo: dict[str, Any]) -> str:
+    name = esc(display_name(str(ipo.get("name") or "?")))
+    gmp = _fmt_num(ipo.get("gmp_pct"), suffix="%")
+    sub = _fmt_x(ipo.get("sub_total"))
+    return f"{name} · {gmp} · {sub}"
+
+
+def _gmp_sort_key(ipo: dict[str, Any]) -> tuple[bool, float]:
+    raw = ipo.get("gmp_pct")
+    if raw is None:
+        return (True, 0.0)
+    try:
+        return (False, -float(raw))
+    except (TypeError, ValueError):
+        return (True, 0.0)
+
+
+def render_channel(date_iso: str, ipos: list[dict[str, Any]]) -> list[str]:
+    """One concise daily digest. Empty when there is nothing to post."""
+    if not ipos:
+        return []
+
+    main = [ipo for ipo in ipos if (ipo.get("board") or "MAIN") != "SME"]
+    sme = [ipo for ipo in ipos if ipo.get("board") == "SME"]
+    main.sort(key=_gmp_sort_key)
+    sme.sort(key=_gmp_sort_key)
+
+    sections: list[str] = []
+    if main:
+        sections.append("<b>Mainboard</b>\n" + "\n".join(_channel_line(ipo) for ipo in main))
+    if sme:
+        sections.append("<b>SME</b>\n" + "\n".join(_channel_line(ipo) for ipo in sme))
+    if not sections:
+        return []
+
+    header = "\n".join(
+        [
+            "<b>IPO GMP</b>",
+            f"<i>{esc(_date_heading(date_iso))}</i>",
+        ]
+    )
+    messages: list[str] = []
+    buf: list[str] = []
+    for section in sections:
+        trial_parts = [header, *buf, section, DISCLAIMER]
+        if buf and len("\n\n".join(trial_parts)) > TELEGRAM_MAX_LEN:
+            messages.append("\n\n".join([header, *buf, DISCLAIMER]))
+            buf = [section]
         else:
-            parts.append("")
-    parts.append(DISCLAIMER)
-    return "\n".join(parts).strip()
+            buf.append(section)
+    if buf:
+        head = header if not messages else header + "\n<i>continued</i>"
+        messages.append("\n\n".join([head, *buf, DISCLAIMER]))
+    return messages

@@ -5,6 +5,18 @@ from __future__ import annotations
 from typing import Any
 
 from bot import config
+from bot.prefs import (
+    BOARD_BOTH,
+    BOARD_MAIN,
+    BOARD_SME,
+    MAIN_GMP_PRESETS,
+    SME_GMP_PRESETS,
+    SUB_PRESETS,
+    board_mode,
+    gmp_main,
+    gmp_sme,
+    nearly,
+)
 
 
 def channel_url() -> str:
@@ -45,43 +57,86 @@ def home_inline() -> dict[str, Any]:
     }
 
 
-def settings_inline(prefs: dict[str, Any]) -> dict[str, Any]:
-    gmp = float(prefs.get("min_gmp_pct", config.MIN_GMP_PCT))
-    sub = float(prefs.get("min_total_sub", config.MIN_TOTAL_SUB))
-    sme = bool(prefs.get("include_sme", config.INCLUDE_SME))
+def _mark(active: bool, label: str) -> str:
+    return f"✓ {label}" if active else label
 
-    def mark(active: bool, label: str) -> str:
-        return f"✓ {label}" if active else label
 
+def _pct_row(
+    current: float, presets: tuple[float, ...], which: str, *, prefix: str = ""
+) -> list[dict[str, str]]:
+    row = []
+    for value in presets:
+        row.append(
+            {
+                "text": _mark(nearly(current, value), f"{prefix}{value:g}%"),
+                "callback_data": f"gmp:{which}:{value:g}",
+            }
+        )
+    return row
+
+
+def _custom_button(
+    current: float, presets: tuple[float, ...], which: str, *, prefix: str = ""
+) -> dict[str, str]:
+    custom = not any(nearly(current, value) for value in presets)
+    if custom:
+        label = f"{prefix}{current:g}%"
+    elif prefix:
+        label = f"Type {prefix.strip()}"
+    else:
+        label = "Type %"
     return {
-        "inline_keyboard": [
-            [
-                {"text": mark(gmp == 20, "GMP 20%"), "callback_data": "gmp:20"},
-                {"text": mark(gmp == 24, "GMP 24%"), "callback_data": "gmp:24"},
-                {"text": mark(gmp == 30, "GMP 30%"), "callback_data": "gmp:30"},
-            ],
-            [
-                {"text": mark(gmp == 40, "GMP 40%"), "callback_data": "gmp:40"},
-                {"text": mark(gmp == 50, "GMP 50%"), "callback_data": "gmp:50"},
-            ],
-            [
-                {"text": mark(sub == 1, "Sub 1x"), "callback_data": "sub:1"},
-                {"text": mark(sub == 2, "Sub 2x"), "callback_data": "sub:2"},
-                {"text": mark(sub == 5, "Sub 5x"), "callback_data": "sub:5"},
-            ],
-            [
-                {
-                    "text": mark(not sme, "MAIN only"),
-                    "callback_data": "board:main",
-                },
-                {
-                    "text": mark(sme, "MAIN + SME"),
-                    "callback_data": "board:all",
-                },
-            ],
-            [
-                {"text": "Preview GMP", "callback_data": "preview"},
-                {"text": "Home", "callback_data": "home"},
-            ],
-        ]
+        "text": _mark(custom, label),
+        "callback_data": f"gmp:ask:{which}",
     }
+
+
+def _chunk(buttons: list[dict[str, str]], size: int = 3) -> list[list[dict[str, str]]]:
+    return [buttons[i : i + size] for i in range(0, len(buttons), size)]
+
+
+def settings_inline(prefs: dict[str, Any]) -> dict[str, Any]:
+    mode = board_mode(prefs)
+    sub = float(prefs.get("min_total_sub", config.MIN_TOTAL_SUB))
+    rows: list[list[dict[str, str]]] = []
+
+    prefix_main = "M " if mode == BOARD_BOTH else ""
+    prefix_sme = "S " if mode == BOARD_BOTH else ""
+
+    if mode in (BOARD_MAIN, BOARD_BOTH):
+        main_buttons = _pct_row(gmp_main(prefs), MAIN_GMP_PRESETS, "main", prefix=prefix_main)
+        main_buttons.append(
+            _custom_button(gmp_main(prefs), MAIN_GMP_PRESETS, "main", prefix=prefix_main)
+        )
+        rows.extend(_chunk(main_buttons))
+
+    if mode in (BOARD_SME, BOARD_BOTH):
+        sme_buttons = _pct_row(gmp_sme(prefs), SME_GMP_PRESETS, "sme", prefix=prefix_sme)
+        sme_buttons.append(
+            _custom_button(gmp_sme(prefs), SME_GMP_PRESETS, "sme", prefix=prefix_sme)
+        )
+        rows.extend(_chunk(sme_buttons))
+
+    rows.append(
+        [
+            {
+                "text": _mark(nearly(sub, value), f"Sub {value:g}x"),
+                "callback_data": f"sub:{value:g}",
+            }
+            for value in SUB_PRESETS
+        ]
+    )
+    rows.append(
+        [
+            {"text": _mark(mode == BOARD_MAIN, "Mainboard"), "callback_data": "board:main"},
+            {"text": _mark(mode == BOARD_SME, "SME"), "callback_data": "board:sme"},
+            {"text": _mark(mode == BOARD_BOTH, "Both"), "callback_data": "board:both"},
+        ]
+    )
+    rows.append(
+        [
+            {"text": "Preview GMP", "callback_data": "preview"},
+            {"text": "Home", "callback_data": "home"},
+        ]
+    )
+    return {"inline_keyboard": rows}

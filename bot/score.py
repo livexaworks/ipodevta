@@ -6,6 +6,7 @@ import statistics
 from typing import Any
 
 from bot import config
+from bot.prefs import board_mode, gmp_for_board
 
 MIN_GMP_PCT = config.MIN_GMP_PCT
 MIN_TOTAL_SUB = config.MIN_TOTAL_SUB
@@ -42,9 +43,8 @@ def evaluate(
     `live` is context only - never gated on.
     """
     p = prefs or {}
-    min_gmp = float(p.get("min_gmp_pct", MIN_GMP_PCT))
+    mode = board_mode(p)
     min_sub = float(p.get("min_total_sub", MIN_TOTAL_SUB))
-    include_sme = bool(p.get("include_sme", INCLUDE_SME))
     min_conf = str(p.get("min_confidence", MIN_CONFIDENCE))
     block_falling = bool(p.get("block_falling_gmp", BLOCK_FALLING_GMP))
 
@@ -53,12 +53,14 @@ def evaluate(
     gmp_pct = ipo.get("gmp_pct")
     confidence = ipo.get("confidence") or "low"
     trend = gmp_trend(history)
+    min_gmp = gmp_for_board(p, board if board in ("MAIN", "SME") else "MAIN")
 
-    if board != "MAIN" and not (include_sme and board == "SME"):
-        if board == "SME":
-            reasons.append("SME issue, excluded")
-        else:
-            reasons.append(f"board {board or 'n/a'} excluded")
+    if board == "SME" and mode == "main":
+        reasons.append("SME issue, excluded")
+    elif board == "MAIN" and mode == "sme":
+        reasons.append("MAIN issue, excluded")
+    elif board not in ("MAIN", "SME"):
+        reasons.append(f"board {board or 'n/a'} excluded")
 
     if gmp_pct is None:
         reasons.append("GMP n/a")
