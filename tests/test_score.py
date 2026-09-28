@@ -6,7 +6,7 @@ from bot import score
 def _ipo(**kwargs):
     base = {
         "board": "MAIN",
-        "gmp_pct": 25.4,
+        "gmp_pct": 36.0,
         "confidence": "high",
         "gmp": 88.0,
         "name": "Vikram Solar",
@@ -68,3 +68,37 @@ def test_user_higher_gmp_bar():
     prev = {"sub_total": 5.0}
     ok, _ = score.evaluate(ipo, None, prev, [], prefs={"min_gmp_pct": 30.0})
     assert ok is False
+
+
+def test_main_default_bar_is_34():
+    ipo = _ipo(gmp_pct=33)
+    prev = {"sub_total": 5.0}
+    ok, reasons = score.evaluate(ipo, None, prev, [])
+    assert ok is False
+    assert any("34" in r for r in reasons)
+
+
+def test_sme_default_bar_is_48_when_included():
+    ipo = _ipo(board="SME", gmp_pct=47)
+    prev = {"sub_total": 5.0}
+    ok, reasons = score.evaluate(ipo, None, prev, [], prefs={"board": "both"})
+    assert ok is False
+    assert any("48" in r for r in reasons)
+
+
+def test_sme_only_excludes_mainboard():
+    ipo = _ipo(board="MAIN", gmp_pct=80)
+    prev = {"sub_total": 5.0}
+    ok, reasons = score.evaluate(ipo, None, prev, [], prefs={"board": "sme"})
+    assert ok is False
+    assert any("MAIN" in r for r in reasons)
+
+
+def test_sme_only_uses_sme_bar():
+    ipo = _ipo(board="SME", gmp_pct=50)
+    prev = {"sub_total": 5.0}
+    ok, reasons = score.evaluate(
+        ipo, None, prev, [], prefs={"board": "sme", "min_gmp_sme": 48}
+    )
+    assert ok is True
+    assert reasons == []

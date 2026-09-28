@@ -145,16 +145,17 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
         from bot import keyboards, preview, preview_cache
 
         source, items = preview.build_preview(prefs, limit=5)
-        text = render.render_preview(prefs, source, items)
-        if len(text) > 4000:
-            text = text[:3900] + "\n\n…truncated."
-        notify.send_message(
-            chat_id,
-            text,
-            reply_markup=keyboards.home_inline(),
-            dry_run=False,
-        )
-        if preview_cache.publish_user_preview(chat_id, text, prefs, source=source):
+        messages = render.render_preview(prefs, source, items)
+        for i, text in enumerate(messages):
+            markup = keyboards.home_inline() if i == len(messages) - 1 else None
+            notify.send_message(
+                chat_id,
+                text,
+                reply_markup=markup,
+                dry_run=False,
+            )
+        cache_text = "\n\n".join(messages)
+        if preview_cache.publish_user_preview(chat_id, cache_text, prefs, source=source):
             log.info("Preview cache published for %s", chat_id)
         log.info("Preview sent to %s (%s, %d items)", chat_id, source, len(items))
         return 0
@@ -191,23 +192,25 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
         return 0
 
     # alert / dry-run
+    # Channel: one unfiltered digest per day, every issue in the market.
+    channel_msgs = render.render_channel(today, enriched)
+    if dry_run:
+        for i, channel_msg in enumerate(channel_msgs, 1):
+            print(f"=== CHANNEL ({i}/{len(channel_msgs)}) ===")
+            print(channel_msg)
+            print()
+    elif channel_msgs and not state.channel_already_sent(today):
+        for channel_msg in channel_msgs:
+            notify.broadcast(channel_msg, dry_run=False)
+        state.mark_channel_sent(today, [c["ipo_id"] for c in enriched])
+        log.info("Channel post sent (%d IPOs, %d message(s))", len(enriched), len(channel_msgs))
+    elif channel_msgs:
+        log.info("Channel already sent for %s - skip", today)
+
     closing = [ipo for ipo in enriched if ipo.get("close_date") == today]
     if not closing:
-        log.info("No IPOs close today (%s). Silence is correct.", today)
+        log.info("No IPOs close today (%s). Channel handled. No DMs.", today)
         return 0
-
-    # Channel: one unfiltered feed
-    channel_msg = render.render_channel(today, closing)
-    if dry_run:
-        print("=== CHANNEL ===")
-        print(channel_msg)
-        print()
-    elif not state.channel_already_sent(today):
-        notify.broadcast(channel_msg, dry_run=False)
-        state.mark_channel_sent(today, [c["ipo_id"] for c in closing])
-        log.info("Channel post sent (%d IPOs)", len(closing))
-    else:
-        log.info("Channel already sent for %s - skip", today)
 
     # Personalized DMs
     user_map = state.load_users()
@@ -232,15 +235,17 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
             ok, reasons = score.evaluate(ipo_view, live, prev, hist, prefs=prefs)
             items.append((ipo_view, ok, reasons, prev, live))
 
-        msg = render.render_dm(today, items)
+        messages = render.render_dm(today, items)
         if dry_run:
-            print(f"=== DM {chat_id} ===")
-            print(msg)
-            print()
+            for i, msg in enumerate(messages, 1):
+                print(f"=== DM {chat_id} ({i}/{len(messages)}) ===")
+                print(msg)
+                print()
         else:
-            notify.dm(chat_id, msg, dry_run=False)
+            for msg in messages:
+                notify.dm(chat_id, msg, dry_run=False)
             state.mark_user_sent(today, chat_id, [c["ipo_id"] for c in closing])
-            log.info("DM sent to %s", chat_id)
+            log.info("DM sent to %s (%d message(s))", chat_id, len(messages))
 
     if warnings and not dry_run:
         notify.admin("IPO bot alert warnings:\n" + "\n".join(warnings[:20]), dry_run=False)

@@ -141,9 +141,13 @@ def save_users(data: dict[str, Any]) -> None:
 
 def default_prefs() -> dict[str, Any]:
     return {
-        "min_gmp_pct": config.MIN_GMP_PCT,
+        "board": "main",
+        "min_gmp_main": config.MIN_GMP_MAIN,
+        "min_gmp_sme": config.MIN_GMP_SME,
+        "min_gmp_pct": config.MIN_GMP_MAIN,
         "min_total_sub": config.MIN_TOTAL_SUB,
         "include_sme": config.INCLUDE_SME,
+        "awaiting_input": None,
         "updated": config.format_ist(),
     }
 

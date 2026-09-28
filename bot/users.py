@@ -8,6 +8,7 @@ from typing import Any
 import requests
 
 from bot import config, keyboards, notify, preview, render, state
+from bot.prefs import board_fields, gmp_fields, parse_pct
 
 log = logging.getLogger(__name__)
 
@@ -146,15 +147,15 @@ def _send_preview(
     if pool is None and not preview._latest_unique_snapshots(1):
         pool = preview.load_live_preview_pool(5)
     source, items = preview.build_preview(prefs, limit=5, live_pool=pool)
-    text = render.render_preview(prefs, source, items)
-    if len(text) > 4000:
-        text = text[:3900] + "\n\n…truncated."
-    notify.send_message(
-        chat_id,
-        text,
-        reply_markup=keyboards.home_inline(),
-        dry_run=dry_run,
-    )
+    messages = render.render_preview(prefs, source, items)
+    for i, text in enumerate(messages):
+        markup = keyboards.home_inline() if i == len(messages) - 1 else None
+        notify.send_message(
+            chat_id,
+            text,
+            reply_markup=markup,
+            dry_run=dry_run,
+        )
     return pool
 
 
@@ -168,6 +169,65 @@ def _send_channel(chat_id: int | str, *, dry_run: bool) -> None:
     )
 
 
+def _consume_custom_gmp(
+    chat_id: int | str,
+    raw: str,
+    *,
+    dry_run: bool,
+) -> bool:
+    """True when this message belongs to a typed GMP percentage."""
+    prefs = state.get_or_create_user(chat_id)
+    waiting = prefs.get("awaiting_input")
+    if waiting not in ("gmp_main", "gmp_sme"):
+        return False
+
+    first = raw.split()[0].lower().split("@")[0] if raw else ""
+    menu = raw in (BTN_PREVIEW, BTN_SETTINGS, BTN_HELP, BTN_CHANNEL, BTN_FEEDBACK)
+    command = first.startswith("/") or first in (
+        "start",
+        "menu",
+        "help",
+        "preview",
+        "gmp",
+        "settings",
+        "status",
+        "sub",
+        "board",
+        "channel",
+        "feedback",
+    )
+    if menu or command:
+        state.update_user(chat_id, awaiting_input=None)
+        return False
+
+    if raw.lower() == "cancel":
+        state.update_user(chat_id, awaiting_input=None)
+        _send_settings(chat_id, dry_run=dry_run)
+        return True
+
+    which = "sme" if waiting == "gmp_sme" else "main"
+    val = parse_pct(raw)
+    if val is None:
+        notify.send_message(
+            chat_id,
+            render.gmp_prompt(which)
+            + "\n\nSend a number from 0 to 300, or <code>cancel</code>.",
+            reply_markup=keyboards.main_reply_keyboard(),
+            dry_run=dry_run,
+        )
+        return True
+
+    updated = state.update_user(chat_id, **gmp_fields(which, val))
+    label = "SME" if which == "sme" else "Mainboard"
+    notify.send_message(
+        chat_id,
+        f"<b>Saved</b>\n{label} GMP {val:g}%\n\n{html_prefs(updated)}",
+        reply_markup=keyboards.settings_inline(updated),
+        dry_run=dry_run,
+    )
+    return True
+
+
 def handle_text(
     chat_id: int | str,
     text: str,
@@ -177,6 +237,9 @@ def handle_text(
 ) -> list[dict[str, Any]] | None:
     raw = (text or "").strip()
     if not raw:
+        return live_pool
+
+    if _consume_custom_gmp(chat_id, raw, dry_run=dry_run):
         return live_pool
 
     if raw == BTN_PREVIEW:
@@ -213,9 +276,13 @@ def handle_text(
     ):
         return _send_preview(chat_id, dry_run=dry_run, live_pool=live_pool)
     if cmd in ("/gmp", "gmp") and len(parts) >= 2:
-        try:
-            val = float(parts[1])
-        except ValueError:
+        which = "main"
+        raw_val = parts[1]
+        if parts[1].lower() == "sme":
+            which = "sme"
+            raw_val = parts[2] if len(parts) >= 3 else ""
+        val = parse_pct(raw_val)
+        if val is None:
             notify.send_message(
                 chat_id,
                 "Use <b>Settings</b> to pick a GMP filter, or tap Preview GMP.",
@@ -223,7 +290,7 @@ def handle_text(
                 dry_run=dry_run,
             )
             return live_pool
-        prefs = state.update_user(chat_id, min_gmp_pct=val)
+        prefs = state.update_user(chat_id, **gmp_fields(which, val))
         notify.send_message(
             chat_id,
             f"<b>Saved</b>\n\n{html_prefs(prefs)}",
@@ -249,8 +316,9 @@ def handle_text(
         )
         return live_pool
     if cmd in ("/board", "board") and len(parts) >= 2:
-        include = parts[1].lower() in ("all", "sme")
-        prefs = state.update_user(chat_id, include_sme=include)
+        token = parts[1].lower()
+        mode = {"all": "both", "both": "both", "sme": "sme", "main": "main"}.get(token, "main")
+        prefs = state.update_user(chat_id, **board_fields(mode))
         notify.send_message(
             chat_id,
             f"<b>Saved</b>\n\n{html_prefs(prefs)}",
@@ -313,14 +381,40 @@ def handle_callback(
         return live_pool
 
     if data.startswith("gmp:"):
+        parts = data.split(":")
+        if len(parts) == 3 and parts[1] == "ask" and parts[2] in ("main", "sme"):
+            which = parts[2]
+            state.update_user(
+                chat_id, awaiting_input="gmp_sme" if which == "sme" else "gmp_main"
+            )
+            notify.answer_callback(
+                callback_query_id,
+                text="Send SME %" if which == "sme" else "Send mainboard %",
+                dry_run=dry_run,
+            )
+            notify.send_message(
+                chat_id,
+                render.gmp_prompt(which),
+                reply_markup=keyboards.main_reply_keyboard(),
+                dry_run=dry_run,
+            )
+            return live_pool
+        which = "main"
+        raw_val = parts[-1]
+        if len(parts) == 3 and parts[1] in ("main", "sme"):
+            which = parts[1]
         try:
-            val = float(data.split(":", 1)[1])
+            val = float(raw_val)
         except ValueError:
             notify.answer_callback(callback_query_id, text="Invalid GMP", dry_run=dry_run)
             return live_pool
-        state.update_user(chat_id, min_gmp_pct=val)
+        if parse_pct(str(val)) is None:
+            notify.answer_callback(callback_query_id, text="Invalid GMP", dry_run=dry_run)
+            return live_pool
+        state.update_user(chat_id, **gmp_fields(which, val))
+        label = "SME" if which == "sme" else "Mainboard"
         notify.answer_callback(
-            callback_query_id, text=f"Min GMP set to {val:g}%", dry_run=dry_run
+            callback_query_id, text=f"{label} GMP set to {val:g}%", dry_run=dry_run
         )
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
         return live_pool
@@ -339,9 +433,10 @@ def handle_callback(
         return live_pool
 
     if data.startswith("board:"):
-        include = data.split(":", 1)[1].lower() in ("all", "sme")
-        state.update_user(chat_id, include_sme=include)
-        toast = "MAIN + SME" if include else "MAIN only"
+        token = data.split(":", 1)[1].lower()
+        mode = {"all": "both", "both": "both", "sme": "sme", "main": "main"}.get(token, "main")
+        state.update_user(chat_id, **board_fields(mode))
+        toast = {"main": "Mainboard only", "sme": "SME only", "both": "Mainboard + SME"}[mode]
         notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
         return live_pool

@@ -10,10 +10,17 @@
  */
 
 const DEFAULTS = {
-  min_gmp_pct: 24.0,
+  board: "main",
+  min_gmp_main: 34.0,
+  min_gmp_sme: 48.0,
+  min_gmp_pct: 34.0,
   min_total_sub: 1.0,
   include_sme: false,
 };
+
+const MAIN_PRESETS = [24, 30, 34, 40, 50];
+const SME_PRESETS = [40, 45, 48, 55, 60];
+const SUB_PRESETS = [1, 2, 5];
 
 const PREVIEW_COOLDOWN_SEC = 60;
 const PREVIEW_CACHE_TTL_SEC = 45 * 60; // serve saved preview for 45 minutes
@@ -43,9 +50,73 @@ function channelUrl(channelId) {
   return `https://t.me/${cid}`;
 }
 
+function boardMode(p) {
+  const raw = String((p && p.board) || "").trim().toLowerCase();
+  if (raw === "main" || raw === "sme" || raw === "both") return raw;
+  if (p && p.include_sme) return "both";
+  return "main";
+}
+
+function gmpMain(p) {
+  if (p && p.min_gmp_main != null && p.min_gmp_main !== "") return Number(p.min_gmp_main);
+  if (p && p.min_gmp_pct != null && p.min_gmp_pct !== "") return Number(p.min_gmp_pct);
+  return DEFAULTS.min_gmp_main;
+}
+
+function gmpSme(p) {
+  if (p && p.min_gmp_sme != null && p.min_gmp_sme !== "") return Number(p.min_gmp_sme);
+  const legacy = p && !("min_gmp_sme" in p) && !("board" in p) && p.min_gmp_pct != null;
+  if (legacy) return Number(p.min_gmp_pct);
+  return DEFAULTS.min_gmp_sme;
+}
+
+function nearly(a, b) {
+  return Math.abs(Number(a) - Number(b)) < 0.05;
+}
+
+function fmtNum(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "n/a";
+  return Number.isInteger(v) ? String(v) : String(v);
+}
+
+function parsePct(raw) {
+  const text = String(raw || "").trim().replace(/%$/, "").trim();
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 0 || n > 300) return null;
+  return n;
+}
+
+function applyBoard(prefs, mode) {
+  prefs.board = mode;
+  prefs.include_sme = mode !== "main";
+  return prefs;
+}
+
+function applyGmp(prefs, which, val) {
+  if (which === "sme") prefs.min_gmp_sme = val;
+  else {
+    prefs.min_gmp_main = val;
+    prefs.min_gmp_pct = val;
+  }
+  return prefs;
+}
+
 function prefsSummary(p) {
-  const board = p.include_sme ? "MAIN + SME" : "MAIN only";
-  return `GMP min     ${p.min_gmp_pct}%\nSub min     ${p.min_total_sub}x\nBoard       ${board}`;
+  const mode = boardMode(p);
+  const sub = `${fmtNum(p.min_total_sub)}x`;
+  if (mode === "sme") {
+    return `Board       SME\nGMP         ${fmtNum(gmpSme(p))}%\nSub         ${sub}`;
+  }
+  if (mode === "both") {
+    return (
+      `Board       Mainboard + SME\n` +
+      `Main GMP    ${fmtNum(gmpMain(p))}%\n` +
+      `SME GMP     ${fmtNum(gmpSme(p))}%\n` +
+      `Sub         ${sub}`
+    );
+  }
+  return `Board       Mainboard\nGMP         ${fmtNum(gmpMain(p))}%\nSub         ${sub}`;
 }
 
 function esc(s) {
@@ -93,10 +164,10 @@ function helpText(channelId) {
     "Recent issues with your filters applied.",
     "",
     "<b>Settings</b>",
-    "Your GMP %, subscription floor, and board.",
+    "Mainboard GMP, SME GMP, subscription floor, and which boards to include.",
     "",
     "<b>Channel</b>",
-    "Closing-day GMP updates with no personal filters.",
+    "One daily GMP list for every issue in the market. No personal filters.",
     "",
     "<b>Feedback</b>",
     "Send a short note to the team.",
@@ -110,13 +181,32 @@ function helpText(channelId) {
 }
 
 function settingsText(p) {
+  const mode = boardMode(p);
+  const hint =
+    mode === "sme"
+      ? "SME percentages are below. Subscription is under that."
+      : mode === "both"
+        ? "Mainboard percentages come first. SME percentages follow. Subscription is under both."
+        : "Mainboard percentages are below. Subscription is under that.";
   return [
     "<b>Settings</b>",
     "",
     prefsBlock(p),
     "",
-    "Tap a value below to change it.",
-    "Your next Preview and closing-day notes use the new values.",
+    hint,
+    "Tap a percentage, or tap <b>Type %</b> and send a number.",
+    "Preview and closing-day notes use these filters.",
+    "The channel still posts one daily list for everyone.",
+  ].join("\n");
+}
+
+function gmpPrompt(which) {
+  const sme = which === "sme";
+  return [
+    `<b>${sme ? "SME GMP" : "Mainboard GMP"}</b>`,
+    "",
+    `Send a percentage, for example <code>${sme ? "48" : "34"}</code>.`,
+    "Type <code>cancel</code> to stop.",
   ].join("\n");
 }
 
@@ -128,7 +218,7 @@ function channelText(channelId) {
     "",
     "No personal filters here.",
     "",
-    "On closing days this channel posts the GMP picture for issues closing that day. If you only want to know where GMP stands on the last day, this is the place. It will keep posting that update in channel form.",
+    "Once a day this channel posts a short GMP and subscription list for the issues in the market. No personal filters. One post, then it stays quiet until the next day.",
     "",
     RULE,
     "",
@@ -178,36 +268,49 @@ function homeInline(channelId) {
 }
 
 function settingsInline(p) {
-  const gmp = Number(p.min_gmp_pct);
+  const mode = boardMode(p);
   const sub = Number(p.min_total_sub);
-  const sme = !!p.include_sme;
   const mark = (on, label) => (on ? `✓ ${label}` : label);
-  return {
-    inline_keyboard: [
-      [
-        { text: mark(gmp === 20, "GMP 20%"), callback_data: "gmp:20" },
-        { text: mark(gmp === 24, "GMP 24%"), callback_data: "gmp:24" },
-        { text: mark(gmp === 30, "GMP 30%"), callback_data: "gmp:30" },
-      ],
-      [
-        { text: mark(gmp === 40, "GMP 40%"), callback_data: "gmp:40" },
-        { text: mark(gmp === 50, "GMP 50%"), callback_data: "gmp:50" },
-      ],
-      [
-        { text: mark(sub === 1, "Sub 1x"), callback_data: "sub:1" },
-        { text: mark(sub === 2, "Sub 2x"), callback_data: "sub:2" },
-        { text: mark(sub === 5, "Sub 5x"), callback_data: "sub:5" },
-      ],
-      [
-        { text: mark(!sme, "MAIN only"), callback_data: "board:main" },
-        { text: mark(sme, "MAIN + SME"), callback_data: "board:all" },
-      ],
-      [
-        { text: "Preview GMP", callback_data: "preview" },
-        { text: "Home", callback_data: "home" },
-      ],
-    ],
+  const pctRows = (current, presets, which, prefix) => {
+    const buttons = presets.map((value) => ({
+      text: mark(nearly(current, value), `${prefix}${value}%`),
+      callback_data: `gmp:${which}:${value}`,
+    }));
+    const custom = !presets.some((value) => nearly(current, value));
+    const typeLabel = prefix ? `Type ${prefix.trim()}` : "Type %";
+    buttons.push({
+      text: mark(custom, custom ? `${prefix}${fmtNum(current)}%` : typeLabel),
+      callback_data: `gmp:ask:${which}`,
+    });
+    const rows = [];
+    for (let i = 0; i < buttons.length; i += 3) rows.push(buttons.slice(i, i + 3));
+    return rows;
   };
+  const rows = [];
+  const prefixMain = mode === "both" ? "M " : "";
+  const prefixSme = mode === "both" ? "S " : "";
+  if (mode === "main" || mode === "both") {
+    rows.push(...pctRows(gmpMain(p), MAIN_PRESETS, "main", prefixMain));
+  }
+  if (mode === "sme" || mode === "both") {
+    rows.push(...pctRows(gmpSme(p), SME_PRESETS, "sme", prefixSme));
+  }
+  rows.push(
+    SUB_PRESETS.map((value) => ({
+      text: mark(nearly(sub, value), `Sub ${value}x`),
+      callback_data: `sub:${value}`,
+    }))
+  );
+  rows.push([
+    { text: mark(mode === "main", "Mainboard"), callback_data: "board:main" },
+    { text: mark(mode === "sme", "SME"), callback_data: "board:sme" },
+    { text: mark(mode === "both", "Both"), callback_data: "board:both" },
+  ]);
+  rows.push([
+    { text: "Preview GMP", callback_data: "preview" },
+    { text: "Home", callback_data: "home" },
+  ]);
+  return { inline_keyboard: rows };
 }
 
 async function tg(env, method, body) {
@@ -396,18 +499,20 @@ async function sendChannel(env, chatId) {
 
 function prefsFingerprint(p) {
   return {
-    min_gmp_pct: Number(p.min_gmp_pct),
+    board: boardMode(p),
+    min_gmp_main: gmpMain(p),
+    min_gmp_sme: gmpSme(p),
     min_total_sub: Number(p.min_total_sub),
-    include_sme: !!p.include_sme,
   };
 }
 
 function prefsEqual(a, b) {
   if (!a || !b) return false;
   return (
-    Number(a.min_gmp_pct) === Number(b.min_gmp_pct) &&
-    Number(a.min_total_sub) === Number(b.min_total_sub) &&
-    !!a.include_sme === !!b.include_sme
+    a.board === b.board &&
+    Number(a.min_gmp_main) === Number(b.min_gmp_main) &&
+    Number(a.min_gmp_sme) === Number(b.min_gmp_sme) &&
+    Number(a.min_total_sub) === Number(b.min_total_sub)
   );
 }
 
@@ -534,10 +639,55 @@ async function sendPreviewAck(env, chatId, callbackQueryId) {
   });
 }
 
+async function handleCustomGmp(env, chatId, raw) {
+  const waiting = await env.PREFS.get(`gmp:await:${chatId}`);
+  if (!waiting) return false;
+  const first = raw.split(/\s+/)[0].toLowerCase().split("@")[0];
+  const menu =
+    Object.values(BTN).includes(raw) ||
+    raw.startsWith("/") ||
+    ["start", "menu", "help", "preview", "settings", "status", "channel", "feedback"].includes(first);
+  if (menu) {
+    await env.PREFS.delete(`gmp:await:${chatId}`);
+    return false;
+  }
+  const which = waiting === "sme" ? "sme" : "main";
+  if (raw.toLowerCase() === "cancel") {
+    await env.PREFS.delete(`gmp:await:${chatId}`);
+    await sendSettings(env, chatId);
+    return true;
+  }
+  const val = parsePct(raw);
+  if (val == null) {
+    await tg(env, "sendMessage", {
+      chat_id: chatId,
+      text: `${gmpPrompt(which)}\n\nSend a number from 0 to 300, or <code>cancel</code>.`,
+      parse_mode: "HTML",
+      reply_markup: mainKeyboard(),
+    });
+    return true;
+  }
+  const prefs = await getPrefs(env, chatId);
+  applyGmp(prefs, which, val);
+  await savePrefs(env, chatId, prefs);
+  await env.PREFS.delete(`gmp:await:${chatId}`);
+  await clearPreviewCache(env, chatId);
+  const label = which === "sme" ? "SME" : "Mainboard";
+  await tg(env, "sendMessage", {
+    chat_id: chatId,
+    text: `<b>Saved</b>\n${label} GMP ${val}%\n\n${prefsBlock(prefs)}`,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: settingsInline(prefs),
+  });
+  return true;
+}
+
 async function handleText(env, chatId, text) {
   const raw = (text || "").trim();
   if (!raw) return;
 
+  if (await handleCustomGmp(env, chatId, raw)) return;
   if (await handleFeedbackMessage(env, chatId, raw)) return;
 
   if (raw === BTN.PREVIEW) return sendPreviewAck(env, chatId);
@@ -600,12 +750,33 @@ async function handleCallback(env, cb) {
   }
 
   if (data.startsWith("gmp:")) {
-    const val = Number(data.split(":")[1]);
+    const parts = data.split(":");
+    if (parts.length === 3 && parts[1] === "ask" && (parts[2] === "main" || parts[2] === "sme")) {
+      const which = parts[2];
+      await env.PREFS.put(`gmp:await:${chatId}`, which, { expirationTtl: 600 });
+      await answer(which === "sme" ? "Send SME %" : "Send mainboard %");
+      await tg(env, "sendMessage", {
+        chat_id: chatId,
+        text: gmpPrompt(which),
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard(),
+      });
+      return;
+    }
+    let which = "main";
+    if (parts.length === 3 && (parts[1] === "main" || parts[1] === "sme")) which = parts[1];
+    const val = parsePct(parts[parts.length - 1]);
+    if (val == null) {
+      await answer("Invalid GMP");
+      return;
+    }
     const prefs = await getPrefs(env, chatId);
-    prefs.min_gmp_pct = val;
+    applyGmp(prefs, which, val);
     await savePrefs(env, chatId, prefs);
+    await env.PREFS.delete(`gmp:await:${chatId}`);
     await clearPreviewCache(env, chatId);
-    await answer(`Min GMP → ${val}%`);
+    const label = which === "sme" ? "SME" : "Mainboard";
+    await answer(`${label} GMP → ${val}%`);
     return sendSettings(env, chatId, messageId);
   }
   if (data.startsWith("sub:")) {
@@ -618,12 +789,15 @@ async function handleCallback(env, cb) {
     return sendSettings(env, chatId, messageId);
   }
   if (data.startsWith("board:")) {
-    const include = ["all", "sme"].includes(data.split(":")[1]);
+    const token = data.split(":")[1];
+    const mode = { all: "both", both: "both", sme: "sme", main: "main" }[token] || "main";
     const prefs = await getPrefs(env, chatId);
-    prefs.include_sme = include;
+    applyBoard(prefs, mode);
     await savePrefs(env, chatId, prefs);
+    await env.PREFS.delete(`gmp:await:${chatId}`);
     await clearPreviewCache(env, chatId);
-    await answer(include ? "MAIN + SME" : "MAIN only");
+    const toast = { main: "Mainboard only", sme: "SME only", both: "Mainboard + SME" }[mode];
+    await answer(toast);
     return sendSettings(env, chatId, messageId);
   }
 

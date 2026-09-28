@@ -11,6 +11,7 @@ from typing import Any
 import requests
 
 from bot import config
+from bot.prefs import fingerprint as prefs_fingerprint_fields
 
 log = logging.getLogger(__name__)
 
@@ -56,11 +57,7 @@ def save_live_pool(ipos: list[dict[str, Any]]) -> None:
 
 
 def prefs_fingerprint(prefs: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "min_gmp_pct": float(prefs.get("min_gmp_pct", config.MIN_GMP_PCT)),
-        "min_total_sub": float(prefs.get("min_total_sub", config.MIN_TOTAL_SUB)),
-        "include_sme": bool(prefs.get("include_sme", config.INCLUDE_SME)),
-    }
+    return prefs_fingerprint_fields(prefs)
 
 
 def publish_user_preview(
