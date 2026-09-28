@@ -14,8 +14,8 @@
   "1645772786": {
     "min_gmp_pct": 24,
     "min_total_sub": 1,
-    "include_sme": false,
-    "updated": "2026-09-20T15:27:48+05:30"
+    "include_sme": true,
+    "updated": "2026-09-28T03:16:28.826Z"
   },
   "5689589858": {
     "min_gmp_pct": 24,
