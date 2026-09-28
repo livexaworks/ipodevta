@@ -15,7 +15,7 @@ TELEGRAM_MAX_LEN = 4096
 DISCLAIMER = (
     "<blockquote expandable>"
     "Grey-market premium is unofficial and can move quickly.\n"
-    "Information only - not investment advice. Read the RHP."
+    "Market data via IPO Guru API. Information only - not investment advice. Read the RHP."
     "</blockquote>"
 )
 

@@ -61,6 +61,8 @@ jobs:
           TELEGRAM_WEBHOOK: ${{ secrets.TELEGRAM_WEBHOOK }}
           WEBHOOK_BASE_URL: ${{ secrets.WEBHOOK_BASE_URL }}
           EXPORT_SECRET: ${{ secrets.EXPORT_SECRET }}
+          IPOGURU_API_KEY: ${{ secrets.IPOGURU_API_KEY }}
+          IPOGURU_MAX_REQUESTS_PER_DAY: "10"
           PREVIEW_CHAT_ID: ${{ steps.m.outputs.chat_id }}
         run: |
           if [ "${{ steps.m.outputs.mode }}" = "preview" ]; then

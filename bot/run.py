@@ -10,8 +10,7 @@ import traceback
 from typing import Any
 
 from bot import config, match, notify, render, score, state, users
-from bot.sources import bse, gmp
-from bot.sources import nse as nse_src
+from bot.sources import bse, gmp, ipoguru
 
 log = logging.getLogger(__name__)
 
@@ -44,9 +43,10 @@ def build_snapshot_rows(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for ipo in enriched:
-        cons = gmp.consolidate(ipo.get("gmp_quotes") or [], ipo.get("price_high"))
+        cons = gmp.from_ipoguru(ipo)
         row = {
             "ipo_id": ipo["ipo_id"],
+            "slug": ipo.get("slug"),
             "ts": ts,
             "date": today,
             "name": ipo["name"],
@@ -55,6 +55,7 @@ def build_snapshot_rows(
             "lot_size": ipo.get("lot_size"),
             "close_date": ipo.get("close_date"),
             "ipo_no": ipo.get("ipo_no"),
+            "web_url": ipo.get("web_url"),
             "gmp": cons["gmp"] if cons else None,
             "gmp_pct": cons["gmp_pct"] if cons else None,
             "n_sources": cons["n_sources"] if cons else None,
@@ -64,9 +65,10 @@ def build_snapshot_rows(
             "sub_qib": ipo.get("sub_qib"),
             "sub_nii": ipo.get("sub_nii"),
             "sub_retail": ipo.get("sub_retail"),
+            "sub_source": ipo.get("sub_source"),
+            "source": "hybrid",
         }
         rows.append(row)
-        # mirror consolidated fields onto ipo for scoring/render
         if cons:
             ipo.update(cons)
         else:
@@ -78,48 +80,60 @@ def build_snapshot_rows(
     return rows
 
 
-def collect(*, require_gmp_sources: int) -> tuple[list[dict[str, Any]], list[str]]:
-    """Fetch BSE + GMP (+ optional NSE). Raises AbortBroadcast on fatal issues."""
+def collect(*, require_gmp: bool = True) -> tuple[list[dict[str, Any]], list[str]]:
+    """
+    Hybrid collect:
+      - IPO Guru (1 call): open calendar + GMP
+      - BSE public APIs: QIB / NII / Retail / Total (no Guru quota)
+    Guru failure is fatal. BSE failure is a warning (total sub from Guru still usable).
+    """
     warnings: list[str] = []
+    try:
+        enriched = ipoguru.fetch_open_ipos(allow_network=True)
+    except ipoguru.IpoGuruError as exc:
+        raise AbortBroadcast(f"IPO Guru: {exc}") from exc
+
+    with_gmp = [i for i in enriched if i.get("gmp") is not None]
+    if require_gmp and not with_gmp:
+        raise AbortBroadcast("IPO Guru returned open IPOs but no GMP readings")
+    if len(with_gmp) < len(enriched):
+        warnings.append(
+            f"GMP missing for {len(enriched) - len(with_gmp)}/{len(enriched)} open IPOs"
+        )
 
     try:
-        live_ipos = bse.load_live_ipos()
+        bse_rows = bse.load_live_ipos()
+        enriched, unmatched = match.attach_bse_subscription(enriched, bse_rows)
+        with_bse = sum(1 for i in enriched if i.get("sub_source") == "bse")
+        log.info("BSE subscription attached to %d/%d Guru IPOs", with_bse, len(enriched))
+        if unmatched:
+            sample = ", ".join(
+                f"{u.get('name')}({u.get('match_score', 0):.0f})" for u in unmatched[:8]
+            )
+            warnings.append(f"Unmatched BSE rows ({len(unmatched)}): {sample}")
     except (bse.BseError, bse.SourceBroken) as exc:
-        raise AbortBroadcast(f"BSE: {exc}") from exc
+        warnings.append(f"BSE subscription unavailable: {exc}")
+        log.warning("BSE failed (continuing with Guru totals only): %s", exc)
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(f"BSE subscription error: {exc}")
+        log.exception("BSE unexpected failure")
 
-    # NSE is optional enrichment only (names); v1 does not merge hard
-    nse_rows = nse_src.fetch_upcoming()
-    if nse_rows:
-        log.info("NSE upcoming rows (informational): %d", len(nse_rows))
-
-    quotes, errors = gmp.fetch_all_gmp()
-    for err in errors:
-        warnings.append(str(err))
-
-    ok_sources = {q["source"] for q in quotes}
-    if len(ok_sources) < require_gmp_sources:
-        detail = "; ".join(warnings) or "too few GMP sources"
-        raise AbortBroadcast(
-            f"Fewer than {require_gmp_sources} GMP sources succeeded "
-            f"({len(ok_sources)} ok). {detail}"
-        )
-    if errors:
-        # partial success still OK if enough sources - admin note
-        log.warning("Some GMP sources failed: %s", errors)
-
-    enriched, unmatched = match.join_gmp_to_ipos(live_ipos, quotes)
-    if unmatched:
-        sample = ", ".join(u["raw_name"] for u in unmatched[:12])
-        warnings.append(f"Unmatched GMP names ({len(unmatched)}): {sample}")
+    remaining = ipoguru.usage_remaining()
+    log.info(
+        "Hybrid collect: %d open (%d with GMP); Guru requests left today=%d",
+        len(enriched),
+        len(with_gmp),
+        remaining,
+    )
     return enriched, warnings
 
 
 def run(mode: str, *, preview_chat_id: str | None = None) -> int:
     dry_run = mode == "dry-run"
-    alert = mode in ("alert", "dry-run")
     # dry-run behaves like alert for building messages, but sends nothing
     # to the channel. Command DMs always send for real so users get feedback.
-    require_gmp = 2 if alert else 1
+    # Single licensed source — require at least one GMP reading on alert/dry-run.
+    require_gmp = mode in ("alert", "dry-run")
 
     today = config.today_ist()
     ts = config.format_ist()
@@ -161,7 +175,7 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
         return 0
 
     try:
-        enriched, warnings = collect(require_gmp_sources=require_gmp)
+        enriched, warnings = collect(require_gmp=require_gmp)
     except AbortBroadcast as exc:
         notify.admin(f"IPO bot abort ({mode}): {exc}", dry_run=dry_run)
         log.error("%s", exc)
@@ -271,6 +285,14 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # Windows consoles (cp1252) choke on 👍/👎 in dry-run dumps; Actions is UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(errors="replace")
+            except Exception:  # noqa: BLE001
+                pass
     config.load_dotenv()
 
     try:

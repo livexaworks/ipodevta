@@ -100,3 +100,46 @@ def join_gmp_to_ipos(
         cid = canon(ipo["name"])
         enriched.append({**ipo, "ipo_id": cid, "gmp_quotes": buckets.get(cid, [])})
     return enriched, unmatched
+
+
+def attach_bse_subscription(
+    guru_ipos: list[dict[str, Any]],
+    bse_ipos: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Fuzzy-match BSE live rows onto IPO Guru rows and copy category subscription.
+
+    Guru remains the identity (slug / ipo_id) and GMP source. BSE supplies
+    sub_qib / sub_nii / sub_retail / sub_total (and ipo_no) when matched.
+    Returns (enriched_guru_ipos, unmatched_bse_rows).
+    """
+    by_canon: dict[str, dict[str, Any]] = {}
+    for ipo in guru_ipos:
+        by_canon[canon(ipo["name"])] = ipo
+
+    candidates = {cid: ipo["name"] for cid, ipo in by_canon.items()}
+    claimed: set[str] = set()
+    unmatched: list[dict[str, Any]] = []
+
+    for bse in bse_ipos:
+        cid, score = match_one(bse["name"], candidates)
+        if cid is None or cid in claimed:
+            unmatched.append({**bse, "match_score": score})
+            continue
+        # Soft board check — reject obvious cross-board false positives.
+        g = by_canon[cid]
+        if g.get("board") and bse.get("board") and g["board"] != bse["board"]:
+            unmatched.append({**bse, "match_score": score, "reject": "board_mismatch"})
+            continue
+        claimed.add(cid)
+        g["ipo_no"] = bse.get("ipo_no")
+        g["bse_name"] = bse.get("name")
+        g["bse_match_score"] = score
+        # Exchange book wins for category totals when present.
+        for key in ("sub_qib", "sub_nii", "sub_retail", "sub_total"):
+            val = bse.get(key)
+            if val is not None:
+                g[key] = val
+        g["sub_source"] = "bse"
+
+    return list(guru_ipos), unmatched
