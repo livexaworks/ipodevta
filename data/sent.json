@@ -113,5 +113,117 @@
         ]
       }
     }
+  },
+  "2026-09-29": {
+    "ts": "2026-09-29T17:06:59+05:30",
+    "channel": {
+      "ts": "2026-09-29T17:06:54+05:30",
+      "ipo_ids": [
+        "vans-electroengineerings-sme-ipo",
+        "papadmalji-agro-foods-sme-ipo",
+        "black-opal-consultants-sme-ipo",
+        "everestims-technologies-sme-ipo",
+        "srit-india-ipo",
+        "shah-investors-home-ipo",
+        "acme-universal-safezone-9-sme-ipo",
+        "shivchem-agro-sme-ipo",
+        "pind-hospitality-sme-ipo",
+        "orient-cables-india-ipo",
+        "runwal-enterprises-ipo",
+        "german-green-steel-power-ipo",
+        "acevector-ipo",
+        "shree-tnb-polymers-sme-ipo",
+        "dudani-retail-sme-ipo",
+        "himalayan-solar-sme-ipo",
+        "bench-mark-infotech-services-sme-ipo",
+        "sai-urja-indo-ventures-sme-ipo"
+      ]
+    },
+    "users": {
+      "715106436": {
+        "ts": "2026-09-29T17:06:56+05:30",
+        "ipo_ids": [
+          "orient-cables-india-ipo",
+          "runwal-enterprises-ipo",
+          "german-green-steel-power-ipo",
+          "acevector-ipo",
+          "shree-tnb-polymers-sme-ipo",
+          "dudani-retail-sme-ipo",
+          "himalayan-solar-sme-ipo",
+          "bench-mark-infotech-services-sme-ipo",
+          "sai-urja-indo-ventures-sme-ipo"
+        ]
+      },
+      "987156126": {
+        "ts": "2026-09-29T17:06:56+05:30",
+        "ipo_ids": [
+          "orient-cables-india-ipo",
+          "runwal-enterprises-ipo",
+          "german-green-steel-power-ipo",
+          "acevector-ipo",
+          "shree-tnb-polymers-sme-ipo",
+          "dudani-retail-sme-ipo",
+          "himalayan-solar-sme-ipo",
+          "bench-mark-infotech-services-sme-ipo",
+          "sai-urja-indo-ventures-sme-ipo"
+        ]
+      },
+      "1645772786": {
+        "ts": "2026-09-29T17:06:57+05:30",
+        "ipo_ids": [
+          "orient-cables-india-ipo",
+          "runwal-enterprises-ipo",
+          "german-green-steel-power-ipo",
+          "acevector-ipo",
+          "shree-tnb-polymers-sme-ipo",
+          "dudani-retail-sme-ipo",
+          "himalayan-solar-sme-ipo",
+          "bench-mark-infotech-services-sme-ipo",
+          "sai-urja-indo-ventures-sme-ipo"
+        ]
+      },
+      "5689589858": {
+        "ts": "2026-09-29T17:06:58+05:30",
+        "ipo_ids": [
+          "orient-cables-india-ipo",
+          "runwal-enterprises-ipo",
+          "german-green-steel-power-ipo",
+          "acevector-ipo",
+          "shree-tnb-polymers-sme-ipo",
+          "dudani-retail-sme-ipo",
+          "himalayan-solar-sme-ipo",
+          "bench-mark-infotech-services-sme-ipo",
+          "sai-urja-indo-ventures-sme-ipo"
+        ]
+      },
+      "8676076099": {
+        "ts": "2026-09-29T17:06:58+05:30",
+        "ipo_ids": [
+          "orient-cables-india-ipo",
+          "runwal-enterprises-ipo",
+          "german-green-steel-power-ipo",
+          "acevector-ipo",
+          "shree-tnb-polymers-sme-ipo",
+          "dudani-retail-sme-ipo",
+          "himalayan-solar-sme-ipo",
+          "bench-mark-infotech-services-sme-ipo",
+          "sai-urja-indo-ventures-sme-ipo"
+        ]
+      },
+      "6536587326": {
+        "ts": "2026-09-29T17:06:59+05:30",
+        "ipo_ids": [
+          "orient-cables-india-ipo",
+          "runwal-enterprises-ipo",
+          "german-green-steel-power-ipo",
+          "acevector-ipo",
+          "shree-tnb-polymers-sme-ipo",
+          "dudani-retail-sme-ipo",
+          "himalayan-solar-sme-ipo",
+          "bench-mark-infotech-services-sme-ipo",
+          "sai-urja-indo-ventures-sme-ipo"
+        ]
+      }
+    }
   }
 }
