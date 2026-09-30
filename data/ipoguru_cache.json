@@ -1,5 +1,5 @@
 {
-  "fetched_at": "2026-09-30T16:54:33+05:30",
+  "fetched_at": "2026-09-30T22:30:56+05:30",
   "date": "2026-09-30",
   "path": "/ipos",
   "params": {
@@ -29,8 +29,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:09.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -49,12 +49,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 0.19,
+      "sub_total": 0.2,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:09.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -77,8 +77,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -101,8 +101,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -121,12 +121,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 0.2,
+      "sub_total": 0.24,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -145,12 +145,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 1.6,
+      "sub_total": 1.63,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -173,8 +173,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -193,12 +193,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 0.8,
+      "sub_total": 0.81,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -221,8 +221,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -245,8 +245,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -260,17 +260,17 @@
       "open_date": "2026-09-29",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/vans-electroengineerings-sme-ipo",
-      "gmp": 90.0,
-      "gmp_pct": 76.27,
+      "gmp": 85.0,
+      "gmp_pct": 72.03,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 55.89,
+      "sub_total": 60.19,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -293,8 +293,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -308,17 +308,17 @@
       "open_date": "2026-09-29",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/black-opal-consultants-sme-ipo",
-      "gmp": 31.0,
-      "gmp_pct": 15.74,
+      "gmp": 48.0,
+      "gmp_pct": 24.37,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 1.18,
+      "sub_total": 1.23,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -337,12 +337,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 0.5,
+      "sub_total": 0.56,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -356,17 +356,17 @@
       "open_date": "2026-09-28",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/srit-india-ipo",
-      "gmp": 38.0,
-      "gmp_pct": 29.23,
+      "gmp": 48.0,
+      "gmp_pct": 36.92,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 124.5,
+      "sub_total": 125.16,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:09.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -385,12 +385,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 37.91,
+      "sub_total": 38.12,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:09.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -404,17 +404,17 @@
       "open_date": "2026-09-28",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/acme-universal-safezone-9-sme-ipo",
-      "gmp": 5.5,
-      "gmp_pct": 7.75,
+      "gmp": 10.0,
+      "gmp_pct": 14.08,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 15.49,
+      "sub_total": 15.63,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -433,12 +433,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 2.13,
+      "sub_total": 2.14,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     },
     {
@@ -457,12 +457,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 2.62,
+      "sub_total": 2.63,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-09-30T11:18:15.000000Z",
-      "gmp_updated_label": "30 Sep 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-09-30T16:42:03.000000Z",
+      "gmp_updated_label": "30 Sep 2026, 10:12 PM IST",
       "source": "ipoguru"
     }
   ]
