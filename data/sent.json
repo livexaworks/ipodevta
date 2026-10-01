@@ -314,5 +314,85 @@
         ]
       }
     }
+  },
+  "2026-10-01": {
+    "ts": "2026-10-01T17:21:46+05:30",
+    "channel": {
+      "ts": "2026-10-01T17:21:41+05:30",
+      "ipo_ids": [
+        "vishal-nirmiti-ipo",
+        "nityas-gems-jewellery-ipo",
+        "eventions-sme-ipo",
+        "sjp-ultrasonic-sme-ipo",
+        "tna-solutions-sme-ipo",
+        "acme-india-industries-sme-ipo",
+        "sollfege-smart-electronics-sme-ipo",
+        "dove-soft-sme-ipo",
+        "paramount-syntex-sme-ipo",
+        "omara-ventures-india-sme-ipo",
+        "vans-electroengineerings-sme-ipo",
+        "papadmalji-agro-foods-sme-ipo",
+        "black-opal-consultants-sme-ipo",
+        "everestims-technologies-sme-ipo",
+        "shree-tnb-polymers-sme-ipo",
+        "green-asia-impex-sme-ipo"
+      ]
+    },
+    "users": {
+      "715106436": {
+        "ts": "2026-10-01T17:21:43+05:30",
+        "ipo_ids": [
+          "vans-electroengineerings-sme-ipo",
+          "papadmalji-agro-foods-sme-ipo",
+          "black-opal-consultants-sme-ipo",
+          "green-asia-impex-sme-ipo"
+        ]
+      },
+      "987156126": {
+        "ts": "2026-10-01T17:21:43+05:30",
+        "ipo_ids": [
+          "vans-electroengineerings-sme-ipo",
+          "papadmalji-agro-foods-sme-ipo",
+          "black-opal-consultants-sme-ipo",
+          "green-asia-impex-sme-ipo"
+        ]
+      },
+      "1645772786": {
+        "ts": "2026-10-01T17:21:44+05:30",
+        "ipo_ids": [
+          "vans-electroengineerings-sme-ipo",
+          "papadmalji-agro-foods-sme-ipo",
+          "black-opal-consultants-sme-ipo",
+          "green-asia-impex-sme-ipo"
+        ]
+      },
+      "5689589858": {
+        "ts": "2026-10-01T17:21:45+05:30",
+        "ipo_ids": [
+          "vans-electroengineerings-sme-ipo",
+          "papadmalji-agro-foods-sme-ipo",
+          "black-opal-consultants-sme-ipo",
+          "green-asia-impex-sme-ipo"
+        ]
+      },
+      "8676076099": {
+        "ts": "2026-10-01T17:21:45+05:30",
+        "ipo_ids": [
+          "vans-electroengineerings-sme-ipo",
+          "papadmalji-agro-foods-sme-ipo",
+          "black-opal-consultants-sme-ipo",
+          "green-asia-impex-sme-ipo"
+        ]
+      },
+      "6536587326": {
+        "ts": "2026-10-01T17:21:46+05:30",
+        "ipo_ids": [
+          "vans-electroengineerings-sme-ipo",
+          "papadmalji-agro-foods-sme-ipo",
+          "black-opal-consultants-sme-ipo",
+          "green-asia-impex-sme-ipo"
+        ]
+      }
+    }
   }
 }
