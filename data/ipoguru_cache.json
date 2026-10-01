@@ -1,5 +1,5 @@
 {
-  "fetched_at": "2026-10-01T17:21:40+05:30",
+  "fetched_at": "2026-10-01T23:00:13+05:30",
   "date": "2026-10-01",
   "path": "/ipos",
   "params": {
@@ -20,8 +20,8 @@
       "open_date": "2026-09-30",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/vishal-nirmiti-ipo",
-      "gmp": 27.0,
-      "gmp_pct": 12.27,
+      "gmp": 20.0,
+      "gmp_pct": 9.09,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
@@ -29,8 +29,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:09.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:09.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -53,8 +53,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:08.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:08.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -77,8 +77,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:24.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -101,8 +101,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:23.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -125,8 +125,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:22.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -149,8 +149,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:22.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -173,8 +173,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:21.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -197,8 +197,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:20.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -221,8 +221,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:19.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -245,8 +245,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:19.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -269,8 +269,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:18.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -293,8 +293,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:17.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -308,8 +308,8 @@
       "open_date": "2026-09-29",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/black-opal-consultants-sme-ipo",
-      "gmp": 30.0,
-      "gmp_pct": 15.23,
+      "gmp": 66.0,
+      "gmp_pct": 33.5,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
@@ -317,8 +317,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:17.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -332,8 +332,8 @@
       "open_date": "2026-09-29",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/everestims-technologies-sme-ipo",
-      "gmp": 10.0,
-      "gmp_pct": 11.76,
+      "gmp": 25.0,
+      "gmp_pct": 29.41,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
@@ -341,8 +341,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:16.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -365,8 +365,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:14.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:15.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     },
     {
@@ -389,8 +389,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-01T11:18:09.000000Z",
-      "gmp_updated_label": "01 Oct 2026, 04:48 PM IST",
+      "gmp_updated_at": "2026-10-01T17:18:10.000000Z",
+      "gmp_updated_label": "01 Oct 2026, 10:48 PM IST",
       "source": "ipoguru"
     }
   ]
