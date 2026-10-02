@@ -394,5 +394,26 @@
         ]
       }
     }
+  },
+  "2026-10-02": {
+    "ts": "2026-10-02T16:53:58+05:30",
+    "channel": {
+      "ts": "2026-10-02T16:53:58+05:30",
+      "ipo_ids": [
+        "vishal-nirmiti-ipo",
+        "nityas-gems-jewellery-ipo",
+        "eventions-sme-ipo",
+        "sjp-ultrasonic-sme-ipo",
+        "tna-solutions-sme-ipo",
+        "acme-india-industries-sme-ipo",
+        "sollfege-smart-electronics-sme-ipo",
+        "dove-soft-sme-ipo",
+        "paramount-syntex-sme-ipo",
+        "omara-ventures-india-sme-ipo",
+        "everestims-technologies-sme-ipo",
+        "shree-tnb-polymers-sme-ipo"
+      ]
+    },
+    "users": {}
   }
 }
