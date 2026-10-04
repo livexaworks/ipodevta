@@ -2,6 +2,10 @@ name = "ipo-devta-bot"
 main = "worker.js"
 compatibility_date = "2026-09-01"
 
+# 05:25 UTC = 10:55 IST, weekdays. Fires repository_dispatch event `alert`.
+[triggers]
+crons = ["25 5 * * 1-5"]
+
 [[kv_namespaces]]
 binding = "PREFS"
 id = "44fd223f49a64286baf31fea04e33218"

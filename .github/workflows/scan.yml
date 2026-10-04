@@ -1,7 +1,9 @@
 name: IPO scan
 on:
   schedule:
-    - cron: "55 5 * * 1-5"    # 10:55 IST, alert mode (weekdays)
+    # 11:15 IST fallback if the Worker cron (10:55 IST) already delivered.
+    # Alert mode checks sent.json and skips the Guru collect when so.
+    - cron: "45 5 * * 1-5"
     - cron: "45 11 * * 1-5"   # 17:15 IST, snapshot mode (weekdays)
     # Fallback poll if webhook is not configured. With TELEGRAM_WEBHOOK=1 this
     # job no-ops quickly (getUpdates skipped).
@@ -17,7 +19,7 @@ on:
         required: false
         default: ""
   repository_dispatch:
-    types: [preview]
+    types: [preview, alert]
 
 concurrency:
   group: ipo-scan
@@ -32,6 +34,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - name: Pull latest data/
+        run: |
+          # Concurrency group prevents overlapping writers; still refresh data/
+          # so a second runner sees briefs already marked in sent.json.
+          git fetch origin "${GITHUB_REF_NAME}" --depth=1
+          git checkout "FETCH_HEAD" -- data/ || true
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -41,12 +49,12 @@ jobs:
         id: m
         run: |
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "mode=preview" >> $GITHUB_OUTPUT
+            echo "mode=${{ github.event.action }}" >> $GITHUB_OUTPUT
             echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
             echo "chat_id=${{ inputs.chat_id }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "55 5 * * 1-5" ]; then
+          elif [ "${{ github.event.schedule }}" = "45 5 * * 1-5" ]; then
             echo "mode=alert" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "45 11 * * 1-5" ]; then
             echo "mode=snapshot" >> $GITHUB_OUTPUT

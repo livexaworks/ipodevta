@@ -74,21 +74,22 @@ def test_channel_digest_is_grouped_and_concise():
     msgs = render.render_channel(
         "2026-09-28",
         [
-            _ipo("Alpha Ltd", board="MAIN", gmp_pct=20, sub_total=1.2),
-            _ipo("Beta Power", board="MAIN", gmp_pct=40, sub_total=2.1),
-            _ipo("Gamma SME", board="SME", gmp_pct=55, sub_total=8),
+            _ipo("Alpha Ltd", board="MAIN", gmp_pct=20, close_date="2026-10-01"),
+            _ipo("Beta Power", board="MAIN", gmp_pct=40, close_date="2026-10-01"),
+            _ipo("Gamma SME", board="SME", gmp_pct=55, close_date="2026-09-28"),
         ],
     )
     assert len(msgs) == 1
     text = msgs[0]
-    assert "IPO GMP" in text
-    assert "<b>Mainboard</b>" in text
-    assert "<b>SME</b>" in text
+    assert "IPOs open" in text
+    assert "Closing today (1)" in text
+    assert "Gamma SME · SME" in text
+    assert "<b>Mainboard (2)</b>" in text
     assert text.index("Beta Power") < text.index("Alpha")
-    assert "Beta Power · 40% · 2.10x" in text
-    assert "Gamma SME · 55% · 8.00x" in text
+    assert "Beta Power · +40%" in text
+    assert "day 1" in text
+    assert "@ipodevta" in text
     assert "GMP          " not in text
-    assert "<blockquote expandable>" in text
 
 
 def test_channel_empty_when_nothing_to_post():

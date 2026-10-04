@@ -73,41 +73,85 @@ def save_sent(data: dict[str, Any]) -> None:
     _write(config.SENT_PATH, data)
 
 
+def brief_key(chat_id: str | int, date: str) -> str:
+    return f"brief:{chat_id}:{date}"
+
+
+def channel_key(date: str) -> str:
+    return f"channel:{date}"
+
+
 def channel_already_sent(date: str) -> bool:
     sent = load_sent()
-    entry = sent.get(date)
-    if not isinstance(entry, dict):
-        return False
-    return bool(entry.get("channel"))
+    entry = sent.get(channel_key(date))
+    return bool(entry)
 
 
-def user_already_sent(date: str, chat_id: str | int) -> bool:
+def brief_already_sent(date: str, chat_id: str | int) -> bool:
     sent = load_sent()
-    entry = sent.get(date)
-    if not isinstance(entry, dict):
-        return False
-    users = entry.get("users") or {}
-    return str(chat_id) in users
+    return brief_key(chat_id, date) in sent
+
+
+def alert_already_ran(date: str) -> bool:
+    """True when today's channel post or any brief is already in sent.json."""
+    sent = load_sent()
+    if channel_key(date) in sent:
+        return True
+    suffix = f":{date}"
+    return any(
+        isinstance(k, str) and k.startswith("brief:") and k.endswith(suffix)
+        for k in sent
+    )
+
+
+# Back-compat alias used by older call sites
+def user_already_sent(date: str, chat_id: str | int) -> bool:
+    return brief_already_sent(date, chat_id)
+
+
+def latest_ipos_for_date(date: str) -> list[dict[str, Any]]:
+    """Latest snapshot row per ipo_id for a given IST date — no network."""
+    by_id: dict[str, dict[str, Any]] = {}
+    for row in load_snapshots():
+        if row.get("date") != date:
+            continue
+        iid = row.get("ipo_id")
+        if not iid:
+            continue
+        cur = by_id.get(str(iid))
+        if cur is None or (row.get("ts") or "") > (cur.get("ts") or ""):
+            by_id[str(iid)] = row
+    return list(by_id.values())
 
 
 def mark_channel_sent(date: str, ipo_ids: list[str]) -> None:
     sent = load_sent()
-    entry = sent.setdefault(date, {"ts": config.format_ist(), "channel": None, "users": {}})
-    if not isinstance(entry.get("users"), dict):
-        entry["users"] = {}
-    entry["channel"] = {"ts": config.format_ist(), "ipo_ids": ipo_ids}
-    entry["ts"] = config.format_ist()
+    sent[channel_key(date)] = {
+        "ts": config.format_ist(),
+        "ipo_ids": ipo_ids,
+    }
     save_sent(sent)
 
 
-def mark_user_sent(date: str, chat_id: str | int, ipo_ids: list[str]) -> None:
+def mark_brief_sent(
+    date: str,
+    chat_id: str | int,
+    *,
+    ipo_ids: list[str] | None = None,
+    quiet: bool = False,
+) -> None:
     sent = load_sent()
-    entry = sent.setdefault(date, {"ts": config.format_ist(), "channel": None, "users": {}})
-    if not isinstance(entry.get("users"), dict):
-        entry["users"] = {}
-    entry["users"][str(chat_id)] = {"ts": config.format_ist(), "ipo_ids": ipo_ids}
-    entry["ts"] = config.format_ist()
+    sent[brief_key(chat_id, date)] = {
+        "ts": config.format_ist(),
+        "ipo_ids": ipo_ids or [],
+        "quiet": quiet,
+    }
     save_sent(sent)
+
+
+# Back-compat alias
+def mark_user_sent(date: str, chat_id: str | int, ipo_ids: list[str]) -> None:
+    mark_brief_sent(date, chat_id, ipo_ids=ipo_ids)
 
 
 def load_users_file() -> dict[str, Any]:

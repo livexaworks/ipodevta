@@ -7,27 +7,38 @@ from typing import Any
 
 import requests
 
-from bot import config, keyboards, notify, preview, render, state
+from bot import config, copy, keyboards, notify, preview, render, state
 from bot.prefs import board_fields, gmp_fields, parse_pct
 
 log = logging.getLogger(__name__)
 
 OFFSET_PATH = config.DATA_DIR / "telegram_offset.json"
 
-# Reply-keyboard labels (exact match)
-BTN_PREVIEW = "Preview GMP"
-BTN_SETTINGS = "Settings"
-BTN_HELP = "Help"
-BTN_CHANNEL = "Channel"
-BTN_FEEDBACK = "Feedback"
 
-BOT_COMMANDS = [
-    {"command": "start", "description": "Open IPODevta"},
-    {"command": "preview", "description": "See issues with your filters"},
-    {"command": "settings", "description": "Set GMP, subscription, board"},
-    {"command": "help", "description": "What you get"},
-    {"command": "feedback", "description": "Send a note to the team"},
-]
+def _btn(key: str) -> str:
+    return copy.t(f"buttons.{key}")
+
+
+# Reply-keyboard labels (exact match) — resolved from shared/copy.json
+BTN_PREVIEW = _btn("preview")
+BTN_SETTINGS = _btn("settings")
+BTN_HELP = _btn("help")
+BTN_CHANNEL = _btn("channel")
+BTN_FEEDBACK = _btn("feedback")
+
+
+def _bot_commands() -> list[dict[str, str]]:
+    c = copy.load()["commands"]
+    return [
+        {"command": "start", "description": c["start"]},
+        {"command": "preview", "description": c["preview"]},
+        {"command": "settings", "description": c["settings"]},
+        {"command": "help", "description": c["help"]},
+        {"command": "feedback", "description": c["feedback"]},
+    ]
+
+
+BOT_COMMANDS = _bot_commands()
 
 
 def _load_offset() -> int | None:
@@ -79,7 +90,7 @@ def ensure_bot_commands() -> None:
     for method, payload in (
         ("setMyShortDescription", {"short_description": short[:120]}),
         ("setMyDescription", {"description": about[:512]}),
-        ("setMyName", {"name": "IPODevta"}),
+        ("setMyName", {"name": copy.t("bot.name")}),
     ):
         try:
             resp = requests.post(f"{base}/{method}", json=payload, timeout=30)
@@ -100,7 +111,7 @@ def _send_home(chat_id: int | str, *, dry_run: bool) -> None:
     )
     notify.send_message(
         chat_id,
-        "Quick actions:",
+        copy.t("labels.quick_actions"),
         reply_markup=keyboards.home_inline(),
         dry_run=dry_run,
     )
@@ -143,19 +154,21 @@ def _send_preview(
 ) -> list[dict[str, Any]] | None:
     prefs = state.get_or_create_user(chat_id)
     pool = live_pool
-    # Only fetch live when snapshots are empty
     if pool is None and not preview._latest_unique_snapshots(1):
-        pool = preview.load_live_preview_pool(5)
-    source, items = preview.build_preview(prefs, limit=5, live_pool=pool)
-    messages = render.render_preview(prefs, source, items)
-    for i, text in enumerate(messages):
-        markup = keyboards.home_inline() if i == len(messages) - 1 else None
-        notify.send_message(
-            chat_id,
-            text,
-            reply_markup=markup,
-            dry_run=dry_run,
-        )
+        pool = preview.load_live_preview_pool(50)
+    source, brief = preview.build_brief_preview(prefs, live_pool=pool)
+    if brief is None:
+        text = "Nothing to show yet.\nCheck again later."
+    else:
+        text = render.render_brief(brief)
+    notify.send_message(
+        chat_id,
+        text,
+        reply_markup=keyboards.brief_inline(),
+        disable_notification=True,
+        dry_run=dry_run,
+    )
+    log.info("Preview brief to %s (%s)", chat_id, source)
     return pool
 
 
@@ -164,7 +177,9 @@ def _send_channel(chat_id: int | str, *, dry_run: bool) -> None:
     notify.send_message(
         chat_id,
         render.channel_invite_text(),
-        reply_markup={"inline_keyboard": [[{"text": "Join channel", "url": url}]]},
+        reply_markup={
+            "inline_keyboard": [[{"text": copy.t("buttons.join_channel"), "url": url}]]
+        },
         dry_run=dry_run,
     )
 
@@ -210,18 +225,22 @@ def _consume_custom_gmp(
     if val is None:
         notify.send_message(
             chat_id,
-            render.gmp_prompt(which)
-            + "\n\nSend a number from 0 to 300, or <code>cancel</code>.",
+            render.gmp_prompt(which) + "\n\n" + copy.t("gmp_prompt.retry"),
             reply_markup=keyboards.main_reply_keyboard(),
             dry_run=dry_run,
         )
         return True
 
     updated = state.update_user(chat_id, **gmp_fields(which, val))
-    label = "SME" if which == "sme" else "Mainboard"
+    label = copy.t("labels.sme") if which == "sme" else copy.t("labels.mainboard")
     notify.send_message(
         chat_id,
-        f"<b>Saved</b>\n{label} GMP {val:g}%\n\n{html_prefs(updated)}",
+        copy.t(
+            "messages.saved_gmp",
+            label=label,
+            value=f"{val:g}",
+            prefs=html_prefs(updated),
+        ),
         reply_markup=keyboards.settings_inline(updated),
         dry_run=dry_run,
     )
@@ -285,7 +304,7 @@ def handle_text(
         if val is None:
             notify.send_message(
                 chat_id,
-                "Use <b>Settings</b> to pick a GMP filter, or tap Preview GMP.",
+                copy.t("messages.use_settings_or_preview"),
                 reply_markup=keyboards.home_inline(),
                 dry_run=dry_run,
             )
@@ -293,7 +312,7 @@ def handle_text(
         prefs = state.update_user(chat_id, **gmp_fields(which, val))
         notify.send_message(
             chat_id,
-            f"<b>Saved</b>\n\n{html_prefs(prefs)}",
+            copy.t("messages.saved_plain", prefs=html_prefs(prefs)),
             reply_markup=keyboards.settings_inline(prefs),
             dry_run=dry_run,
         )
@@ -310,7 +329,7 @@ def handle_text(
         prefs = state.update_user(chat_id, min_total_sub=val)
         notify.send_message(
             chat_id,
-            f"<b>Saved</b>\n\n{html_prefs(prefs)}",
+            copy.t("messages.saved_plain", prefs=html_prefs(prefs)),
             reply_markup=keyboards.settings_inline(prefs),
             dry_run=dry_run,
         )
@@ -321,7 +340,7 @@ def handle_text(
         prefs = state.update_user(chat_id, **board_fields(mode))
         notify.send_message(
             chat_id,
-            f"<b>Saved</b>\n\n{html_prefs(prefs)}",
+            copy.t("messages.saved_plain", prefs=html_prefs(prefs)),
             reply_markup=keyboards.settings_inline(prefs),
             dry_run=dry_run,
         )
@@ -336,7 +355,7 @@ def handle_text(
 
     notify.send_message(
         chat_id,
-        "Use the buttons below - Preview GMP, Settings, Help, or Channel.",
+        copy.t("messages.use_buttons"),
         reply_markup=keyboards.main_reply_keyboard(),
         dry_run=dry_run,
     )
@@ -361,18 +380,26 @@ def handle_callback(
     data = (data or "").strip()
 
     if data in ("home", "menu", "start"):
-        notify.answer_callback(callback_query_id, text="Home", dry_run=dry_run)
+        notify.answer_callback(
+            callback_query_id, text=copy.t("toasts.home"), dry_run=dry_run
+        )
         _send_home(chat_id, dry_run=dry_run)
         return live_pool
     if data == "help":
-        notify.answer_callback(callback_query_id, text="Help", dry_run=dry_run)
+        notify.answer_callback(
+            callback_query_id, text=copy.t("toasts.help"), dry_run=dry_run
+        )
         _send_help(chat_id, dry_run=dry_run)
         return live_pool
     if data == "preview":
-        notify.answer_callback(callback_query_id, text="Building preview…", dry_run=dry_run)
+        notify.answer_callback(
+            callback_query_id, text=copy.t("preview.building"), dry_run=dry_run
+        )
         return _send_preview(chat_id, dry_run=dry_run, live_pool=live_pool)
     if data == "settings":
-        notify.answer_callback(callback_query_id, text="Settings", dry_run=dry_run)
+        notify.answer_callback(
+            callback_query_id, text=copy.t("toasts.settings"), dry_run=dry_run
+        )
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
         return live_pool
     if data == "channel":
@@ -389,7 +416,9 @@ def handle_callback(
             )
             notify.answer_callback(
                 callback_query_id,
-                text="Send SME %" if which == "sme" else "Send mainboard %",
+                text=copy.t("toasts.send_sme_pct")
+                if which == "sme"
+                else copy.t("toasts.send_main_pct"),
                 dry_run=dry_run,
             )
             notify.send_message(
@@ -406,15 +435,21 @@ def handle_callback(
         try:
             val = float(raw_val)
         except ValueError:
-            notify.answer_callback(callback_query_id, text="Invalid GMP", dry_run=dry_run)
+            notify.answer_callback(
+                callback_query_id, text=copy.t("toasts.invalid_gmp"), dry_run=dry_run
+            )
             return live_pool
         if parse_pct(str(val)) is None:
-            notify.answer_callback(callback_query_id, text="Invalid GMP", dry_run=dry_run)
+            notify.answer_callback(
+                callback_query_id, text=copy.t("toasts.invalid_gmp"), dry_run=dry_run
+            )
             return live_pool
         state.update_user(chat_id, **gmp_fields(which, val))
-        label = "SME" if which == "sme" else "Mainboard"
+        label = copy.t("labels.sme") if which == "sme" else copy.t("labels.mainboard")
         notify.answer_callback(
-            callback_query_id, text=f"{label} GMP set to {val:g}%", dry_run=dry_run
+            callback_query_id,
+            text=copy.t("toasts.gmp_set", label=label, value=f"{val:g}"),
+            dry_run=dry_run,
         )
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
         return live_pool
@@ -423,11 +458,15 @@ def handle_callback(
         try:
             val = float(data.split(":", 1)[1])
         except ValueError:
-            notify.answer_callback(callback_query_id, text="Invalid sub", dry_run=dry_run)
+            notify.answer_callback(
+                callback_query_id, text=copy.t("toasts.invalid_sub"), dry_run=dry_run
+            )
             return live_pool
         state.update_user(chat_id, min_total_sub=val)
         notify.answer_callback(
-            callback_query_id, text=f"Min subscription set to {val:g}x", dry_run=dry_run
+            callback_query_id,
+            text=copy.t("toasts.sub_saved_long", value=f"{val:g}"),
+            dry_run=dry_run,
         )
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
         return live_pool
@@ -436,12 +475,18 @@ def handle_callback(
         token = data.split(":", 1)[1].lower()
         mode = {"all": "both", "both": "both", "sme": "sme", "main": "main"}.get(token, "main")
         state.update_user(chat_id, **board_fields(mode))
-        toast = {"main": "Mainboard only", "sme": "SME only", "both": "Mainboard + SME"}[mode]
+        toast = {
+            "main": copy.t("toasts.board_main"),
+            "sme": copy.t("toasts.board_sme"),
+            "both": copy.t("toasts.board_both"),
+        }[mode]
         notify.answer_callback(callback_query_id, text=toast, dry_run=dry_run)
         _send_settings(chat_id, dry_run=dry_run, message_id=message_id)
         return live_pool
 
-    notify.answer_callback(callback_query_id, text="Unknown action", dry_run=dry_run)
+    notify.answer_callback(
+        callback_query_id, text=copy.t("toasts.unknown"), dry_run=dry_run
+    )
     return live_pool
 
 

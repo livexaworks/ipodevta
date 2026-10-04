@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import sys
 import traceback
 from typing import Any
 
-from bot import config, match, notify, render, score, state, users
+from bot import brief as brief_mod
+from bot import config, keyboards, match, notify, render, state, users
 from bot.sources import bse, gmp, ipoguru
 
 log = logging.getLogger(__name__)
@@ -19,20 +21,11 @@ class AbortBroadcast(Exception):
     """Fatal data problem - alert admin, send nothing to channel/users."""
 
 
-def _history_for(snapshots: list[dict[str, Any]], ipo_id: str) -> list[dict[str, Any]]:
-    rows = [s for s in snapshots if s.get("ipo_id") == ipo_id]
-    rows.sort(key=lambda r: (r.get("date") or "", r.get("ts") or ""))
-    return rows
-
-
-def _prev_close(history: list[dict[str, Any]], today: str) -> dict[str, Any] | None:
-    prior = [h for h in history if h.get("date") and h["date"] < today]
-    if not prior:
-        return None
-    # last snapshot on the most recent prior date
-    last_date = prior[-1]["date"]
-    same_day = [h for h in prior if h["date"] == last_date]
-    return same_day[-1]
+def _hhmm_from_ts(ts: str) -> str:
+    m = re.search(r"T(\d{2}):(\d{2})", ts)
+    if m:
+        return f"{m.group(1)}:{m.group(2)}"
+    return "10:55"
 
 
 def build_snapshot_rows(
@@ -80,18 +73,27 @@ def build_snapshot_rows(
     return rows
 
 
-def collect(*, require_gmp: bool = True) -> tuple[list[dict[str, Any]], list[str]]:
+def collect(
+    *, require_gmp: bool = True
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
     """
-    Hybrid collect:
-      - IPO Guru (1 call): open calendar + GMP
-      - BSE public APIs: QIB / NII / Retail / Total (no Guru quota)
-    Guru failure is fatal. BSE failure is a warning (total sub from Guru still usable).
+    Hybrid collect. Returns (ipos, warnings, stats).
+    stats: guru_calls, bse_matched, bse_total, unmatched_names
     """
     warnings: list[str] = []
+    stats: dict[str, Any] = {
+        "guru_calls": 0,
+        "bse_matched": 0,
+        "bse_total": 0,
+        "unmatched_names": [],
+    }
+    before = int(ipoguru._usage_today().get("requests") or 0)  # noqa: SLF001
     try:
         enriched = ipoguru.fetch_open_ipos(allow_network=True)
     except ipoguru.IpoGuruError as exc:
         raise AbortBroadcast(f"IPO Guru: {exc}") from exc
+    after = int(ipoguru._usage_today().get("requests") or 0)  # noqa: SLF001
+    stats["guru_calls"] = max(0, after - before)
 
     with_gmp = [i for i in enriched if i.get("gmp") is not None]
     if require_gmp and not with_gmp:
@@ -103,8 +105,13 @@ def collect(*, require_gmp: bool = True) -> tuple[list[dict[str, Any]], list[str
 
     try:
         bse_rows = bse.load_live_ipos()
+        stats["bse_total"] = len(bse_rows)
         enriched, unmatched = match.attach_bse_subscription(enriched, bse_rows)
         with_bse = sum(1 for i in enriched if i.get("sub_source") == "bse")
+        stats["bse_matched"] = with_bse
+        stats["unmatched_names"] = [
+            str(u.get("name") or "?") for u in unmatched[:12]
+        ]
         log.info("BSE subscription attached to %d/%d Guru IPOs", with_bse, len(enriched))
         if unmatched:
             sample = ", ".join(
@@ -125,21 +132,46 @@ def collect(*, require_gmp: bool = True) -> tuple[list[dict[str, Any]], list[str
         len(with_gmp),
         remaining,
     )
-    return enriched, warnings
+    return enriched, warnings, stats
+
+
+def _write_step_summary(line: str) -> None:
+    path = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(line.rstrip() + "\n")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("GITHUB_STEP_SUMMARY write failed: %s", exc)
+
+
+def _report_line(
+    *,
+    guru_calls: int,
+    bse_matched: int,
+    bse_total: int,
+    unmatched: list[str],
+    briefs_sent: int,
+    briefs_failed: int,
+    channel_posted: bool | str,
+) -> str:
+    unmatched_s = ", ".join(unmatched[:6]) if unmatched else "none"
+    return (
+        f"Guru calls={guru_calls}; BSE matched {bse_matched}/{bse_total} "
+        f"(unmatched: {unmatched_s}); briefs sent={briefs_sent} failed={briefs_failed}; "
+        f"channel={channel_posted}"
+    )
 
 
 def run(mode: str, *, preview_chat_id: str | None = None) -> int:
     dry_run = mode == "dry-run"
-    # dry-run behaves like alert for building messages, but sends nothing
-    # to the channel. Command DMs always send for real so users get feedback.
-    # Single licensed source — require at least one GMP reading on alert/dry-run.
     require_gmp = mode in ("alert", "dry-run")
 
     today = config.today_ist()
     ts = config.format_ist()
+    collect_hhmm = _hhmm_from_ts(ts)
 
-    # Always drain user commands first (replies are never dry-run)
-    # Skipped automatically when TELEGRAM_WEBHOOK / WEBHOOK_BASE_URL is set.
     try:
         n = users.drain_updates(dry_run=False)
         log.info("Processed %d Telegram updates", n)
@@ -156,42 +188,72 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
             log.error("preview mode requires PREVIEW_CHAT_ID")
             return 1
         prefs = state.get_or_create_user(chat_id)
-        from bot import keyboards, preview, preview_cache
+        from bot import preview, preview_cache
 
-        source, items = preview.build_preview(prefs, limit=5)
-        messages = render.render_preview(prefs, source, items)
-        for i, text in enumerate(messages):
-            markup = keyboards.home_inline() if i == len(messages) - 1 else None
-            notify.send_message(
-                chat_id,
-                text,
-                reply_markup=markup,
-                dry_run=False,
-            )
-        cache_text = "\n\n".join(messages)
-        if preview_cache.publish_user_preview(chat_id, cache_text, prefs, source=source):
+        source, brief = preview.build_brief_preview(prefs)
+        if brief is None:
+            text = "Nothing to show yet.\nCheck again later."
+        else:
+            text = render.render_brief(brief)
+        notify.send_message(
+            chat_id,
+            text,
+            reply_markup=keyboards.brief_inline(),
+            disable_notification=True,
+            dry_run=False,
+        )
+        if preview_cache.publish_user_preview(chat_id, text, prefs, source=source):
             log.info("Preview cache published for %s", chat_id)
-        log.info("Preview sent to %s (%s, %d items)", chat_id, source, len(items))
+        log.info("Preview brief sent to %s (%s)", chat_id, source)
         return 0
 
-    try:
-        enriched, warnings = collect(require_gmp=require_gmp)
-    except AbortBroadcast as exc:
-        notify.admin(f"IPO bot abort ({mode}): {exc}", dry_run=dry_run)
-        log.error("%s", exc)
-        return 1
+    skip_collect = (
+        mode == "alert"
+        and not dry_run
+        and state.alert_already_ran(today)
+    )
+    warnings: list[str] = []
+    stats: dict[str, Any] = {
+        "guru_calls": 0,
+        "bse_matched": 0,
+        "bse_total": 0,
+        "unmatched_names": [],
+    }
+    snap_rows: list[dict[str, Any]] = []
 
-    snap_rows = build_snapshot_rows(enriched, ts=ts, today=today)
-    if not dry_run:
-        state.append_snapshots(snap_rows)
+    if skip_collect:
+        log.info("Alert already recorded for %s — skip Guru collect", today)
+        enriched = state.latest_ipos_for_date(today)
+        all_snaps = state.load_snapshots()
+        if not enriched:
+            report = _report_line(
+                guru_calls=0,
+                bse_matched=0,
+                bse_total=0,
+                unmatched=[],
+                briefs_sent=0,
+                briefs_failed=0,
+                channel_posted="already",
+            )
+            log.info("Alert report: %s", report)
+            _write_step_summary(report)
+            notify.admin(f"IPO alert report: {report}", dry_run=False)
+            return 0
     else:
-        # still load existing for prev_close logic
-        pass
+        try:
+            enriched, warnings, stats = collect(require_gmp=require_gmp)
+        except AbortBroadcast as exc:
+            notify.admin(f"IPO bot abort ({mode}): {exc}", dry_run=dry_run)
+            log.error("%s", exc)
+            return 1
 
-    all_snaps = state.load_snapshots()
-    if dry_run:
-        # include in-memory rows for history continuity in this process
-        all_snaps = list(all_snaps) + snap_rows
+        snap_rows = build_snapshot_rows(enriched, ts=ts, today=today)
+        if not dry_run:
+            state.append_snapshots(snap_rows)
+
+        all_snaps = state.load_snapshots()
+        if dry_run:
+            all_snaps = list(all_snaps) + snap_rows
 
     for w in warnings:
         log.warning("%s", w)
@@ -205,65 +267,150 @@ def run(mode: str, *, preview_chat_id: str | None = None) -> int:
         log.info("Snapshot mode complete (%d rows). No broadcast.", len(snap_rows))
         return 0
 
-    # alert / dry-run
-    # Channel: one unfiltered digest per day, every issue in the market.
-    channel_msgs = render.render_channel(today, enriched)
+    # --- alert / dry-run ---
+    channel_posted: bool | str = False
+    channel_msgs = render.render_channel(
+        today, enriched, history=all_snaps, collect_hhmm=collect_hhmm
+    )
     if dry_run:
         for i, channel_msg in enumerate(channel_msgs, 1):
             print(f"=== CHANNEL ({i}/{len(channel_msgs)}) ===")
             print(channel_msg)
             print()
-    elif channel_msgs and not state.channel_already_sent(today):
-        for channel_msg in channel_msgs:
-            notify.broadcast(channel_msg, dry_run=False)
-        state.mark_channel_sent(today, [c["ipo_id"] for c in enriched])
-        log.info("Channel post sent (%d IPOs, %d message(s))", len(enriched), len(channel_msgs))
-    elif channel_msgs:
+        channel_posted = "dry-run" if channel_msgs else False
+    elif not channel_msgs:
+        log.info("No open IPOs — skip channel")
+        channel_posted = False
+    elif not state.channel_already_sent(today):
+        try:
+            # One post per day: a single HTML message.
+            notify.broadcast(channel_msgs[0], dry_run=False)
+            state.mark_channel_sent(today, [c["ipo_id"] for c in enriched])
+            channel_posted = True
+            log.info("Channel post sent (%d IPOs)", len(enriched))
+        except notify.NotifyError as exc:
+            log.error("Channel post failed: %s", exc)
+            channel_posted = "failed"
+    else:
         log.info("Channel already sent for %s - skip", today)
+        channel_posted = "already"
 
-    closing = [ipo for ipo in enriched if ipo.get("close_date") == today]
-    if not closing:
-        log.info("No IPOs close today (%s). Channel handled. No DMs.", today)
-        return 0
-
-    # Personalized DMs
+    briefs_sent = 0
+    briefs_failed = 0
     user_map = state.load_users()
+
     for chat_id, prefs in user_map.items():
-        if not dry_run and state.user_already_sent(today, chat_id):
-            log.info("User %s already sent for %s - skip", chat_id, today)
+        if not dry_run and state.brief_already_sent(today, chat_id):
+            log.info("User %s already briefed for %s - skip", chat_id, today)
             continue
 
-        items = []
-        for ipo in closing:
-            hist = _history_for(all_snaps, ipo["ipo_id"])
-            # attach history for trend display
-            ipo_view = {**ipo, "history": hist}
-            prev = _prev_close(hist, today)
-            live = {
-                "sub_total": ipo.get("sub_total"),
-                "sub_qib": ipo.get("sub_qib"),
-                "sub_nii": ipo.get("sub_nii"),
-                "sub_retail": ipo.get("sub_retail"),
-                "board": ipo.get("board"),
-            }
-            ok, reasons = score.evaluate(ipo_view, live, prev, hist, prefs=prefs)
-            items.append((ipo_view, ok, reasons, prev, live))
+        brief = brief_mod.build_brief(
+            enriched,
+            prefs,
+            all_snaps,
+            today,
+            collect_hhmm=collect_hhmm,
+        )
+        if brief is None:
+            log.info("User %s: nothing open - no brief", chat_id)
+            continue
 
-        messages = render.render_dm(today, items)
+        text = render.render_brief(brief)
+        silent = not brief.notify
+
         if dry_run:
-            for i, msg in enumerate(messages, 1):
-                print(f"=== DM {chat_id} ({i}/{len(messages)}) ===")
-                print(msg)
-                print()
-        else:
-            for msg in messages:
-                notify.dm(chat_id, msg, dry_run=False)
-            state.mark_user_sent(today, chat_id, [c["ipo_id"] for c in closing])
-            log.info("DM sent to %s (%d message(s))", chat_id, len(messages))
+            print(f"=== BRIEF {chat_id} quiet={brief.quiet} notify={brief.notify} ===")
+            print(text)
+            print()
+            briefs_sent += 1
+            continue
 
-    if warnings and not dry_run:
-        notify.admin("IPO bot alert warnings:\n" + "\n".join(warnings[:20]), dry_run=False)
+        try:
+            notify.dm(
+                chat_id,
+                text,
+                reply_markup=keyboards.brief_inline(),
+                disable_notification=silent,
+                dry_run=False,
+            )
+            visible_ids = [
+                r.ipo_id
+                for r in (*brief.closing, *brief.fits, *brief.waiting, *brief.skip)
+            ]
+            state.mark_brief_sent(
+                today,
+                chat_id,
+                ipo_ids=visible_ids,
+                quiet=brief.quiet,
+            )
+            briefs_sent += 1
+            log.info(
+                "Brief sent to %s (quiet=%s notify=%s)",
+                chat_id,
+                brief.quiet,
+                brief.notify,
+            )
+        except Exception as exc:  # noqa: BLE001
+            briefs_failed += 1
+            log.warning("Brief failed for %s: %s", chat_id, exc)
 
+    report = _report_line(
+        guru_calls=int(stats.get("guru_calls") or 0),
+        bse_matched=int(stats.get("bse_matched") or 0),
+        bse_total=int(stats.get("bse_total") or 0),
+        unmatched=list(stats.get("unmatched_names") or []),
+        briefs_sent=briefs_sent,
+        briefs_failed=briefs_failed,
+        channel_posted=channel_posted,
+    )
+    log.info("Alert report: %s", report)
+    _write_step_summary(report)
+    if not dry_run:
+        notify.admin(f"IPO alert report: {report}", dry_run=False)
+        if warnings:
+            notify.admin(
+                "IPO bot alert warnings:\n" + "\n".join(warnings[:20]),
+                dry_run=False,
+            )
+
+    return 0
+
+
+def run_fixture_dry(
+    fixture_name: str,
+    *,
+    to_admin: bool = False,
+) -> int:
+    """Render a brief fixture (no Guru calls, no state writes)."""
+    from tests.brief_support import build_from_fixture, render_fixture
+
+    text = render_fixture(fixture_name)
+    if text is None:
+        log.info("Fixture %s → no brief (None)", fixture_name)
+        print("(no brief)")
+        return 0
+
+    b = build_from_fixture(fixture_name)
+    markup = keyboards.brief_inline()
+    print(text)
+    print("--- keyboard ---")
+    print(markup)
+    if b is not None:
+        print(f"--- notify_sound={b.notify} quiet={b.quiet} ---")
+
+    if to_admin:
+        chat = config.admin_chat_id()
+        if not chat:
+            log.error("ADMIN_CHAT_ID unset")
+            return 1
+        notify.send_message(
+            chat,
+            text,
+            reply_markup=markup,
+            disable_notification=not (b and b.notify),
+            dry_run=False,
+        )
+        log.info("Fixture %s sent to admin %s", fixture_name, chat)
     return 0
 
 
@@ -279,13 +426,22 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Target chat for --mode preview",
     )
+    parser.add_argument(
+        "--fixture",
+        default=None,
+        help="With dry-run: render tests/fixtures/brief/<name>.json (no Guru/state)",
+    )
+    parser.add_argument(
+        "--to-admin",
+        action="store_true",
+        help="With --fixture: send rendered brief to ADMIN_CHAT_ID",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    # Windows consoles (cp1252) choke on 👍/👎 in dry-run dumps; Actions is UTF-8.
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if callable(reconfigure):
@@ -296,6 +452,8 @@ def main(argv: list[str] | None = None) -> int:
     config.load_dotenv()
 
     try:
+        if args.mode == "dry-run" and args.fixture:
+            return run_fixture_dry(args.fixture, to_admin=args.to_admin)
         return run(args.mode, preview_chat_id=args.chat_id)
     except Exception as exc:  # noqa: BLE001
         tb = traceback.format_exc()

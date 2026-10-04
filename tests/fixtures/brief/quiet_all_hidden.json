@@ -1,0 +1,90 @@
+{
+  "id": "quiet_all_hidden",
+  "today": "2026-10-01",
+  "collect_hhmm": "10:55",
+  "prefs": {
+    "board": "main",
+    "min_gmp_main": 34,
+    "min_gmp_sme": 48,
+    "min_total_sub": 1,
+    "min_confidence": "medium",
+    "block_falling_gmp": true,
+    "include_sme": false
+  },
+  "ipos": [
+    {
+      "ipo_id": "vans-electroengineerings",
+      "name": "Vans Electroengineerings Limited",
+      "board": "SME",
+      "price_high": 75,
+      "lot_size": 1600,
+      "close_date": "2026-10-01",
+      "gmp": 20,
+      "gmp_pct": 27,
+      "confidence": "high",
+      "n_sources": 1,
+      "sub_total": 2.0,
+      "sub_qib": 0.5,
+      "sub_nii": 2.5,
+      "sub_retail": 2.2
+    },
+    {
+      "ipo_id": "papadmalji-agro-foods",
+      "name": "Papadmalji Agro Foods Limited",
+      "board": "SME",
+      "price_high": 68,
+      "lot_size": 2000,
+      "close_date": "2026-10-01",
+      "gmp": 10,
+      "gmp_pct": 15,
+      "confidence": "medium",
+      "n_sources": 1,
+      "sub_total": 1.4,
+      "sub_qib": 0.3,
+      "sub_nii": 1.8,
+      "sub_retail": 1.5
+    },
+    {
+      "ipo_id": "black-opal-consultants",
+      "name": "Black Opal Consultants Limited",
+      "board": "SME",
+      "price_high": 110,
+      "lot_size": 1200,
+      "close_date": "2026-10-01",
+      "gmp": 30,
+      "gmp_pct": 27,
+      "confidence": "high",
+      "n_sources": 2,
+      "sub_total": 3.1,
+      "sub_qib": 0.8,
+      "sub_nii": 4.0,
+      "sub_retail": 3.5
+    },
+    {
+      "ipo_id": "green-asia-impex",
+      "name": "Green Asia Impex Limited",
+      "board": "SME",
+      "price_high": 85,
+      "lot_size": 1600,
+      "close_date": "2026-10-01",
+      "gmp": 12,
+      "gmp_pct": 14,
+      "confidence": "medium",
+      "n_sources": 1,
+      "sub_total": 0.9,
+      "sub_qib": 0.2,
+      "sub_nii": 1.1,
+      "sub_retail": 1.0
+    }
+  ],
+  "history": [
+    {"ipo_id": "vans-electroengineerings", "date": "2026-09-29", "ts": "2026-09-29T17:15:00+05:30", "gmp_pct": 24, "sub_total": 0.5, "sub_qib": 0.1, "sub_nii": 0.6, "sub_retail": 0.5},
+    {"ipo_id": "vans-electroengineerings", "date": "2026-09-30", "ts": "2026-09-30T17:15:00+05:30", "gmp_pct": 26, "sub_total": 2.0, "sub_qib": 0.5, "sub_nii": 2.5, "sub_retail": 2.2},
+    {"ipo_id": "papadmalji-agro-foods", "date": "2026-09-29", "ts": "2026-09-29T17:15:00+05:30", "gmp_pct": 14, "sub_total": 0.4, "sub_qib": 0.1, "sub_nii": 0.5, "sub_retail": 0.4},
+    {"ipo_id": "papadmalji-agro-foods", "date": "2026-09-30", "ts": "2026-09-30T17:15:00+05:30", "gmp_pct": 15, "sub_total": 1.4, "sub_qib": 0.3, "sub_nii": 1.8, "sub_retail": 1.5},
+    {"ipo_id": "black-opal-consultants", "date": "2026-09-29", "ts": "2026-09-29T17:15:00+05:30", "gmp_pct": 25, "sub_total": 0.8, "sub_qib": 0.2, "sub_nii": 1.0, "sub_retail": 0.9},
+    {"ipo_id": "black-opal-consultants", "date": "2026-09-30", "ts": "2026-09-30T17:15:00+05:30", "gmp_pct": 27, "sub_total": 3.1, "sub_qib": 0.8, "sub_nii": 4.0, "sub_retail": 3.5},
+    {"ipo_id": "green-asia-impex", "date": "2026-09-29", "ts": "2026-09-29T17:15:00+05:30", "gmp_pct": 13, "sub_total": 0.3, "sub_qib": 0.05, "sub_nii": 0.4, "sub_retail": 0.3},
+    {"ipo_id": "green-asia-impex", "date": "2026-09-30", "ts": "2026-09-30T17:15:00+05:30", "gmp_pct": 14, "sub_total": 0.9, "sub_qib": 0.2, "sub_nii": 1.1, "sub_retail": 1.0}
+  ]
+}

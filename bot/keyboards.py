@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from bot import config
+from bot import config, copy
 from bot.prefs import (
     BOARD_BOTH,
     BOARD_MAIN,
@@ -28,13 +28,17 @@ def channel_url() -> str:
     return f"https://t.me/{cid}"
 
 
+def btn(key: str) -> str:
+    return copy.t(f"buttons.{key}")
+
+
 def main_reply_keyboard() -> dict[str, Any]:
     """Persistent bottom keyboard - no typing required."""
     return {
         "keyboard": [
-            [{"text": "Preview GMP"}, {"text": "Settings"}],
-            [{"text": "Help"}, {"text": "Channel"}],
-            [{"text": "Feedback"}],
+            [{"text": btn("preview")}, {"text": btn("settings")}],
+            [{"text": btn("help")}, {"text": btn("channel")}],
+            [{"text": btn("feedback")}],
         ],
         "resize_keyboard": True,
         "is_persistent": True,
@@ -45,14 +49,26 @@ def home_inline() -> dict[str, Any]:
     return {
         "inline_keyboard": [
             [
-                {"text": "Preview GMP", "callback_data": "preview"},
-                {"text": "Settings", "callback_data": "settings"},
+                {"text": btn("preview"), "callback_data": "preview"},
+                {"text": btn("settings"), "callback_data": "settings"},
             ],
             [
-                {"text": "Help", "callback_data": "help"},
-                {"text": "Join channel", "url": channel_url()},
+                {"text": btn("help"), "callback_data": "help"},
+                {"text": btn("join_channel"), "url": channel_url()},
             ],
-            [{"text": "Feedback", "callback_data": "feedback"}],
+            [{"text": btn("feedback"), "callback_data": "feedback"}],
+        ]
+    }
+
+
+def brief_inline() -> dict[str, Any]:
+    """One row: Filters (settings callback) + All IPOs (channel URL)."""
+    return {
+        "inline_keyboard": [
+            [
+                {"text": btn("filters"), "callback_data": "settings"},
+                {"text": btn("all_ipos"), "url": "https://t.me/ipodevta"},
+            ]
         ]
     }
 
@@ -82,9 +98,9 @@ def _custom_button(
     if custom:
         label = f"{prefix}{current:g}%"
     elif prefix:
-        label = f"Type {prefix.strip()}"
+        label = copy.t("buttons.type_pct_prefixed", prefix=prefix.strip())
     else:
-        label = "Type %"
+        label = btn("type_pct")
     return {
         "text": _mark(custom, label),
         "callback_data": f"gmp:ask:{which}",
@@ -120,7 +136,10 @@ def settings_inline(prefs: dict[str, Any]) -> dict[str, Any]:
     rows.append(
         [
             {
-                "text": _mark(nearly(sub, value), f"Sub {value:g}x"),
+                "text": _mark(
+                    nearly(sub, value),
+                    copy.t("buttons.sub_preset", value=f"{value:g}"),
+                ),
                 "callback_data": f"sub:{value:g}",
             }
             for value in SUB_PRESETS
@@ -128,15 +147,24 @@ def settings_inline(prefs: dict[str, Any]) -> dict[str, Any]:
     )
     rows.append(
         [
-            {"text": _mark(mode == BOARD_MAIN, "Mainboard"), "callback_data": "board:main"},
-            {"text": _mark(mode == BOARD_SME, "SME"), "callback_data": "board:sme"},
-            {"text": _mark(mode == BOARD_BOTH, "Both"), "callback_data": "board:both"},
+            {
+                "text": _mark(mode == BOARD_MAIN, btn("board_main")),
+                "callback_data": "board:main",
+            },
+            {
+                "text": _mark(mode == BOARD_SME, btn("board_sme")),
+                "callback_data": "board:sme",
+            },
+            {
+                "text": _mark(mode == BOARD_BOTH, btn("board_both")),
+                "callback_data": "board:both",
+            },
         ]
     )
     rows.append(
         [
-            {"text": "Preview GMP", "callback_data": "preview"},
-            {"text": "Home", "callback_data": "home"},
+            {"text": btn("preview"), "callback_data": "preview"},
+            {"text": btn("home"), "callback_data": "home"},
         ]
     )
     return {"inline_keyboard": rows}

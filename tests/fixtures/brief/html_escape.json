@@ -1,0 +1,29 @@
+{
+  "id": "html_escape",
+  "today": "2026-10-05",
+  "collect_hhmm": "10:55",
+  "prefs": {
+    "board": "main",
+    "min_gmp_main": 34,
+    "min_total_sub": 1,
+    "min_confidence": "medium",
+    "block_falling_gmp": true
+  },
+  "ipos": [
+    {
+      "ipo_id": "ss-power",
+      "name": "S&S Power <Beta> Ltd",
+      "board": "MAIN",
+      "price_high": 100,
+      "lot_size": 100,
+      "close_date": "2026-10-05",
+      "gmp": 40,
+      "gmp_pct": 40,
+      "confidence": "high",
+      "sub_total": 2.0
+    }
+  ],
+  "history": [
+    {"ipo_id": "ss-power", "date": "2026-10-04", "ts": "2026-10-04T17:15:00+05:30", "gmp_pct": 38, "sub_total": 1.5, "sub_qib": 0.4, "sub_nii": 2.0, "sub_retail": 1.8}
+  ]
+}

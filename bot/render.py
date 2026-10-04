@@ -4,87 +4,38 @@ from __future__ import annotations
 
 import html
 from collections import OrderedDict
-from datetime import datetime
 from typing import Any
 
-from bot import keyboards, score as score_mod
+from bot import copy, fmt, keyboards, score as score_mod
 from bot.prefs import board_mode, gmp_main, gmp_sme
+from bot.render_brief import (  # noqa: F401 — public API
+    render_brief,
+    render_channel_digest,
+    render_quiet,
+    visible_len,
+)
 
 TELEGRAM_MAX_LEN = 4096
 
-DISCLAIMER = (
-    "<blockquote expandable>"
-    "Grey-market premium is unofficial and can move quickly.\n"
-    "Market data via IPO Guru API. Information only - not investment advice. Read the RHP."
-    "</blockquote>"
-)
+# Re-exports for existing call sites / tests
+esc = fmt.esc
+display_name = fmt.display_name
+NAME_CASE_EXCEPTIONS = fmt.NAME_CASE_EXCEPTIONS
 
-# Kept for worker/JS parity and older call sites; delivery messages use blank lines.
-RULE = "────────────"
+DISCLAIMER = copy.t("disclaimer.dm")
+RULE = copy.t("rule")
 TREND_ARROW = {"rising": "↗", "falling": "↘", "flat": "→"}
 
-# Tokens kept ALL CAPS after .title() normalisation (e.g. "FX Parts").
-NAME_CASE_EXCEPTIONS = frozenset({"FX", "NSE", "BSE", "SME", "IPO", "QIB", "NII", "AI", "IT"})
-
-# Bot profile copy (setMyShortDescription / setMyDescription)
-SHORT_DESCRIPTION = (
-    "IPO fills without the clutter. Clear 👍 / 👎 with GMP and subscription."
-)
-BOT_DESCRIPTION = (
-    "IPODevta removes the clutter from IPO fill decisions.\n\n"
-    "You get a simple 👍 or 👎 with GMP and subscription numbers, "
-    "using filters you set.\n\n"
-    "Tap Feedback anytime to send a note to the team.\n\n"
-    "Information only - not investment advice. Read the RHP."
-)
-
-
-def esc(text: Any) -> str:
-    if text is None:
-        return "n/a"
-    return html.escape(str(text), quote=False)
+SHORT_DESCRIPTION = copy.t("bot.short_description")
+BOT_DESCRIPTION = copy.t("bot.description")
 
 
 def _fmt_num(val: Any, *, suffix: str = "", places: int | None = None) -> str:
-    if val is None:
-        return "n/a"
-    try:
-        n = float(val)
-    except (TypeError, ValueError):
-        return "n/a"
-    if places is not None:
-        return f"{n:.{places}f}{suffix}"
-    if n == int(n):
-        return f"{int(n)}{suffix}"
-    return f"{n:g}{suffix}"
+    return fmt.fmt_num(val, suffix=suffix, places=places)
 
 
 def _fmt_x(val: Any) -> str:
-    if val is None:
-        return "n/a"
-    try:
-        return f"{float(val):.2f}x"
-    except (TypeError, ValueError):
-        return "n/a"
-
-
-def _short_name(name: str) -> str:
-    parts = str(name).split()
-    while parts and parts[-1].lower().rstrip(".") in ("limited", "ltd", "llp"):
-        parts.pop()
-    return " ".join(parts) if parts else name
-
-
-def display_name(name: str) -> str:
-    """Title-case company names; keep a small ALL-CAPS exception list."""
-    short = _short_name(str(name))
-    words: list[str] = []
-    for word in short.title().split():
-        if word.upper() in NAME_CASE_EXCEPTIONS:
-            words.append(word.upper())
-        else:
-            words.append(word)
-    return " ".join(words) if words else short
+    return fmt.fmt_x(val)
 
 
 def _ipo_label(ipo: dict[str, Any]) -> str:
@@ -93,11 +44,7 @@ def _ipo_label(ipo: dict[str, Any]) -> str:
 
 
 def _date_heading(date_iso: str) -> str:
-    try:
-        d = datetime.strptime(date_iso, "%Y-%m-%d")
-        return d.strftime("%d %b %Y").lstrip("0")
-    except ValueError:
-        return date_iso
+    return fmt.date_heading(date_iso)
 
 
 def _lot_line(ipo: dict[str, Any]) -> str | None:
@@ -105,160 +52,167 @@ def _lot_line(ipo: dict[str, Any]) -> str | None:
     price = ipo.get("price_high")
     if lot is None:
         return None
+    label = copy.t("labels.lot")
     if price is not None:
         try:
             amount = int(lot) * float(price)
-            return f"Lot          {int(lot)}  ·  ≈ ₹{amount:,.0f}"
+            return f"{label}          {int(lot)}  ·  ≈ ₹{amount:,.0f}"
         except (TypeError, ValueError):
             pass
-    return f"Lot          {lot}"
+    return f"{label}          {lot}"
 
 
 def prefs_summary(prefs: dict[str, Any]) -> str:
     mode = board_mode(prefs)
     sub = _fmt_num(prefs.get("min_total_sub"), suffix="x")
     if mode == "sme":
-        return (
-            f"Board       SME\n"
-            f"GMP         {_fmt_num(gmp_sme(prefs), suffix='%')}\n"
-            f"Sub         {sub}"
+        return "\n".join(
+            [
+                copy.t("labels.board_sme_line"),
+                copy.t("labels.gmp_line", value=_fmt_num(gmp_sme(prefs), suffix="%")),
+                copy.t("labels.sub_line", value=sub),
+            ]
         )
     if mode == "both":
-        return (
-            f"Board       Mainboard + SME\n"
-            f"Main GMP    {_fmt_num(gmp_main(prefs), suffix='%')}\n"
-            f"SME GMP     {_fmt_num(gmp_sme(prefs), suffix='%')}\n"
-            f"Sub         {sub}"
+        return "\n".join(
+            [
+                copy.t("labels.board_both_line"),
+                copy.t("labels.main_gmp_line", value=_fmt_num(gmp_main(prefs), suffix="%")),
+                copy.t("labels.sme_gmp_line", value=_fmt_num(gmp_sme(prefs), suffix="%")),
+                copy.t("labels.sub_line", value=sub),
+            ]
         )
-    return (
-        f"Board       Mainboard\n"
-        f"GMP         {_fmt_num(gmp_main(prefs), suffix='%')}\n"
-        f"Sub         {sub}"
+    return "\n".join(
+        [
+            copy.t("labels.board_main_line"),
+            copy.t("labels.gmp_line", value=_fmt_num(gmp_main(prefs), suffix="%")),
+            copy.t("labels.sub_line", value=sub),
+        ]
     )
 
 
 def prefs_block(prefs: dict[str, Any]) -> str:
-    return f"<b>Your filters</b>\n<code>{html.escape(prefs_summary(prefs), quote=False)}</code>"
+    return (
+        f"<b>{copy.t('labels.your_filters')}</b>\n"
+        f"<code>{html.escape(prefs_summary(prefs), quote=False)}</code>"
+    )
 
 
 def channel_invite_text() -> str:
     channel = keyboards.channel_url()
     handle = channel.replace("https://t.me/", "@")
+    c = copy.load()["channel_invite"]
     return "\n".join(
         [
-            "<b>Public channel</b>",
+            c["title"],
             "",
-            "No personal filters here.",
+            c["no_filters"],
             "",
-            "Once a day this channel posts a short GMP and subscription list "
-            "for the issues in the market. No personal filters. One post, "
-            "then it stays quiet until the next day.",
+            c["body"],
             "",
-            f'<a href="{channel}">Join {handle}</a>',
+            copy.t("channel_invite.join", channel=channel, handle=handle),
             "",
-            "Happy filing. All the best for allotments in the companies you care about.",
+            c["closing"],
         ]
     )
 
 
 def welcome_text(prefs: dict[str, Any]) -> str:
     channel = keyboards.channel_url()
+    w = copy.load()["welcome"]
     return "\n".join(
         [
-            "<b>IPODevta</b>",
-            "<i>IPO fills without the clutter.</i>",
+            w["title"],
+            w["tagline"],
             "",
-            "On closing days you get:",
-            "• A clear 👍 or 👎 for each issue",
-            "• GMP and subscription in one place",
-            "• Filters you control",
+            w["lead"],
+            w["bullet_verdict"],
+            w["bullet_numbers"],
+            w["bullet_filters"],
             "",
             prefs_block(prefs),
             "",
-            "Use the buttons below. No typing needed.",
+            w["buttons_hint"],
             "",
-            f'Want closing-day GMP with no filters? <a href="{channel}">Join the public channel</a>',
+            copy.t("welcome.channel_invite", channel=channel),
             "",
-            "Something off? Tap <b>Feedback</b>.",
+            w["feedback_hint"],
             "",
-            "<i>Happy filing. All the best for allotments.</i>",
+            w["closing"],
         ]
     )
 
 
 def help_text() -> str:
+    """At most 8 lines of explanation; long disclaimer lives here."""
     channel = keyboards.channel_url()
+    h = copy.load()["help"]
+    long_disc = copy.t("disclaimer.long")
     return "\n".join(
         [
-            "<b>What you get</b>",
-            "",
-            "<b>Preview GMP</b>",
-            "Recent issues with your filters applied.",
-            "",
-            "<b>Settings</b>",
-            "Mainboard GMP, SME GMP, subscription floor, and which boards to include.",
-            "",
-            "<b>Channel</b>",
-            "One daily GMP list for every issue in the market. No personal filters.",
-            "",
-            "<b>Feedback</b>",
-            "Send a short note to the team.",
-            "",
-            f'<a href="{channel}">Open the public channel</a>',
-            "",
-            DISCLAIMER,
+            h["title"],
+            h["sections"],
+            h["check"],
+            h["hidden"],
+            h["actions"],
+            h["feedback"],
+            copy.t("help.open_channel", channel=channel),
+            f"<blockquote expandable>{long_disc}</blockquote>",
         ]
     )
 
 
 def settings_text(prefs: dict[str, Any]) -> str:
     mode = board_mode(prefs)
+    s = copy.load()["settings"]
     if mode == "sme":
-        hint = "SME percentages are below. Subscription is under that."
+        hint = s["hint_sme"]
     elif mode == "both":
-        hint = "Mainboard percentages come first. SME percentages follow. Subscription is under both."
+        hint = s["hint_both"]
     else:
-        hint = "Mainboard percentages are below. Subscription is under that."
+        hint = s["hint_main"]
     return "\n".join(
         [
-            "<b>Settings</b>",
+            s["title"],
             "",
             prefs_block(prefs),
             "",
             hint,
-            "Tap a percentage, or tap <b>Type %</b> and send a number.",
-            "Preview and closing-day notes use these filters.",
-            "The channel still posts one daily list for everyone.",
+            s["tap_hint"],
+            s["filters_use"],
+            s["channel_note"],
         ]
     )
 
 
 def gmp_prompt(which: str) -> str:
+    g = copy.load()["gmp_prompt"]
     if which == "sme":
-        title = "SME GMP"
+        title = g["title_sme"]
         example = "48"
     else:
-        title = "Mainboard GMP"
+        title = g["title_main"]
         example = "34"
     return "\n".join(
         [
-            f"<b>{title}</b>",
+            title,
             "",
-            f"Send a percentage, for example <code>{example}</code>.",
-            "Type <code>cancel</code> to stop.",
+            copy.t("gmp_prompt.body", example=example),
+            g["cancel"],
         ]
     )
 
 
 def feedback_prompt() -> str:
+    f = copy.load()["feedback"]
     return "\n".join(
         [
-            "<b>Feedback</b>",
+            f["title"],
             "",
-            "Send your note in one message.",
-            "We will forward it to the team.",
+            f["body"],
+            f["forward"],
             "",
-            "Type <code>cancel</code> to stop.",
+            f["cancel"],
         ]
     )
 
@@ -268,14 +222,12 @@ def render_preview(
     source: str,
     items: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
 ) -> list[str]:
-    if source == "live":
-        note = "Open issues scored with your filters."
-    else:
-        note = "Recent issues scored with your filters."
+    p = copy.load()["preview"]
+    note = p["note_live"] if source == "live" else p["note_processed"]
 
     header = "\n".join(
         [
-            "<b>Preview</b>",
+            f"<b>{copy.t('labels.preview')}</b>",
             f"<i>{esc(note)}</i>",
             "",
             prefs_block(prefs),
@@ -286,8 +238,8 @@ def render_preview(
             [
                 header,
                 "",
-                "Nothing to show yet.",
-                "Check again later.",
+                p["empty_1"],
+                p["empty_2"],
             ]
         )
         return [body]
@@ -311,10 +263,11 @@ def render_match_card(
         f"             {_fmt_num(gmp_pct, suffix='%')}  {arrow}",
         "",
     ]
+    prior_label = copy.t("labels.subscription_prior")
     if prev is not None:
         lines.extend(
             [
-                "Subscription (prior close)",
+                prior_label,
                 (
                     f"QIB {_fmt_x(prev.get('sub_qib'))}  ·  "
                     f"NII {_fmt_x(prev.get('sub_nii'))}  ·  "
@@ -325,15 +278,15 @@ def render_match_card(
             ]
         )
     else:
-        lines.extend(["Subscription (prior close)", "n/a", ""])
+        lines.extend([prior_label, copy.t("na"), ""])
 
-    lines.append(f"Live book    {_fmt_x((live or ipo).get('sub_total'))}")
+    lines.append(f"{copy.t('labels.live_book')}    {_fmt_x((live or ipo).get('sub_total'))}")
     lot = _lot_line(ipo)
     if lot:
         lines.append(lot)
     close = ipo.get("close_date")
     if close:
-        lines.append(f"Closes       {esc(_date_heading(str(close)))}")
+        lines.append(f"{copy.t('labels.closes')}       {esc(_date_heading(str(close)))}")
     return "\n".join(lines)
 
 
@@ -345,16 +298,16 @@ def render_thumb_up(
 
 
 def render_thumb_down(ipo: dict[str, Any], reasons: list[str]) -> str:
-    reason = reasons[0] if reasons else "did not pass your filters"
+    reason = reasons[0] if reasons else copy.t("labels.did_not_pass")
     return "\n".join([_ipo_label(ipo), esc(reason)])
 
 
 def _matches_section(
     ups: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
 ) -> str:
-    lines = ["<b>👍 Matches your filters</b>"]
+    lines = [f"<b>{copy.t('labels.matches_header')}</b>"]
     if not ups:
-        lines.append("None today")
+        lines.append(copy.t("labels.none_today"))
         return "\n".join(lines)
     cards = [render_match_card(ipo, prev=prev, live=live) for ipo, _ok, _r, prev, live in ups]
     lines.append("")
@@ -365,14 +318,14 @@ def _matches_section(
 def _skipped_section(
     downs: list[tuple[dict[str, Any], bool, list[str], dict[str, Any] | None, dict[str, Any] | None]],
 ) -> str:
-    lines = ["<b>👎 Skipped</b>"]
+    lines = [f"<b>{copy.t('labels.skipped_header')}</b>"]
     if not downs:
-        lines.append("None today")
+        lines.append(copy.t("labels.none_today"))
         return "\n".join(lines)
 
     groups: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
     for ipo, _ok, reasons, _prev, _live in downs:
-        reason = reasons[0] if reasons else "did not pass your filters"
+        reason = reasons[0] if reasons else copy.t("labels.did_not_pass")
         groups.setdefault(reason, []).append(ipo)
 
     blocks: list[str] = []
@@ -404,8 +357,8 @@ def _pack_scored_messages(
     if len(first) <= TELEGRAM_MAX_LEN and len(second) <= TELEGRAM_MAX_LEN:
         return [first, second]
 
-    # Extreme overflow: still return the split; callers may truncate further.
-    return [first[: TELEGRAM_MAX_LEN - 20] + "\n\n…truncated.", second[: TELEGRAM_MAX_LEN - 20] + "\n\n…truncated."]
+    trunc = "\n\n" + copy.t("messages.truncated")
+    return [first[: TELEGRAM_MAX_LEN - 20] + trunc, second[: TELEGRAM_MAX_LEN - 20] + trunc]
 
 
 def render_dm(
@@ -416,64 +369,29 @@ def render_dm(
 ) -> list[str]:
     header = "\n".join(
         [
-            "<b>Closing today</b>",
+            f"<b>{copy.t('labels.closing_today')}</b>",
             f"<i>{esc(_date_heading(date_iso))}</i>",
         ]
     )
     return _pack_scored_messages(header, items)
 
 
-def _channel_line(ipo: dict[str, Any]) -> str:
-    name = esc(display_name(str(ipo.get("name") or "?")))
-    gmp = _fmt_num(ipo.get("gmp_pct"), suffix="%")
-    sub = _fmt_x(ipo.get("sub_total"))
-    return f"{name} · {gmp} · {sub}"
+def render_channel(
+    date_iso: str,
+    ipos: list[dict[str, Any]],
+    *,
+    history: list[dict[str, Any]] | None = None,
+    collect_hhmm: str = "10:55",
+) -> list[str]:
+    """One unfiltered daily digest. Empty when there is nothing to post."""
+    from bot import brief as brief_mod
 
-
-def _gmp_sort_key(ipo: dict[str, Any]) -> tuple[bool, float]:
-    raw = ipo.get("gmp_pct")
-    if raw is None:
-        return (True, 0.0)
-    try:
-        return (False, -float(raw))
-    except (TypeError, ValueError):
-        return (True, 0.0)
-
-
-def render_channel(date_iso: str, ipos: list[dict[str, Any]]) -> list[str]:
-    """One concise daily digest. Empty when there is nothing to post."""
-    if not ipos:
-        return []
-
-    main = [ipo for ipo in ipos if (ipo.get("board") or "MAIN") != "SME"]
-    sme = [ipo for ipo in ipos if ipo.get("board") == "SME"]
-    main.sort(key=_gmp_sort_key)
-    sme.sort(key=_gmp_sort_key)
-
-    sections: list[str] = []
-    if main:
-        sections.append("<b>Mainboard</b>\n" + "\n".join(_channel_line(ipo) for ipo in main))
-    if sme:
-        sections.append("<b>SME</b>\n" + "\n".join(_channel_line(ipo) for ipo in sme))
-    if not sections:
-        return []
-
-    header = "\n".join(
-        [
-            "<b>IPO GMP</b>",
-            f"<i>{esc(_date_heading(date_iso))}</i>",
-        ]
+    digest = brief_mod.build_channel(
+        ipos,
+        history or [],
+        date_iso,
+        collect_hhmm=collect_hhmm,
     )
-    messages: list[str] = []
-    buf: list[str] = []
-    for section in sections:
-        trial_parts = [header, *buf, section, DISCLAIMER]
-        if buf and len("\n\n".join(trial_parts)) > TELEGRAM_MAX_LEN:
-            messages.append("\n\n".join([header, *buf, DISCLAIMER]))
-            buf = [section]
-        else:
-            buf.append(section)
-    if buf:
-        head = header if not messages else header + "\n<i>continued</i>"
-        messages.append("\n\n".join([head, *buf, DISCLAIMER]))
-    return messages
+    if digest is None:
+        return []
+    return [render_channel_digest(digest)]

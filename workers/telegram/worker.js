@@ -2,12 +2,16 @@
  * IPO Devta - instant Telegram webhook (Cloudflare Worker).
  *
  * Handles fixed replies immediately: Start, Help, Settings, Channel, filter taps.
- * Preview GMP acknowledges instantly, then triggers GitHub Actions for the heavy fetch.
+ * Preview acknowledges instantly, then triggers GitHub Actions for the heavy fetch.
+ *
+ * User-facing strings come from shared/copy.json (synced to ./copy.js).
  *
  * Bindings / secrets:
  *   KV namespace binding: PREFS
  *   Secrets: TELEGRAM_TOKEN, CHANNEL_ID, GITHUB_TOKEN, GITHUB_REPO (owner/name)
  */
+
+import COPY from "./copy.js";
 
 const DEFAULTS = {
   board: "main",
@@ -23,25 +27,37 @@ const SME_PRESETS = [40, 45, 48, 55, 60];
 const SUB_PRESETS = [1, 2, 5];
 
 const PREVIEW_COOLDOWN_SEC = 60;
-const PREVIEW_CACHE_TTL_SEC = 45 * 60; // serve saved preview for 45 minutes
-const RULE = "────────────";
+const PREVIEW_CACHE_TTL_SEC = 45 * 60;
+
+function t(path, vars) {
+  const parts = path.split(".");
+  let cur = COPY;
+  for (const p of parts) {
+    if (cur == null || typeof cur !== "object" || !(p in cur)) {
+      throw new Error(`copy path not found: ${path}`);
+    }
+    cur = cur[p];
+  }
+  let text = String(cur);
+  if (vars) {
+    text = text.replace(/\{(\w+)\}/g, (_, key) =>
+      vars[key] == null ? `{${key}}` : String(vars[key])
+    );
+  }
+  return text;
+}
+
+function btn(key) {
+  return t(`buttons.${key}`);
+}
 
 const BTN = {
-  PREVIEW: "Preview GMP",
-  SETTINGS: "Settings",
-  HELP: "Help",
-  CHANNEL: "Channel",
-  FEEDBACK: "Feedback",
+  PREVIEW: btn("preview"),
+  SETTINGS: btn("settings"),
+  HELP: btn("help"),
+  CHANNEL: btn("channel"),
+  FEEDBACK: btn("feedback"),
 };
-
-const SHORT_DESCRIPTION =
-  "IPO fills without the clutter. Clear 👍 / 👎 with GMP and subscription.";
-
-const BOT_DESCRIPTION =
-  "IPODevta removes the clutter from IPO fill decisions.\n\n" +
-  "You get a simple 👍 or 👎 with GMP and subscription numbers, using filters you set.\n\n" +
-  "Tap Feedback anytime to send a note to the team.\n\n" +
-  "Information only - not investment advice. Read the RHP.";
 
 function channelUrl(channelId) {
   const cid = (channelId || "@ipodevta").trim();
@@ -76,7 +92,7 @@ function nearly(a, b) {
 
 function fmtNum(n) {
   const v = Number(n);
-  if (!Number.isFinite(v)) return "n/a";
+  if (!Number.isFinite(v)) return t("na");
   return Number.isInteger(v) ? String(v) : String(v);
 }
 
@@ -106,17 +122,25 @@ function prefsSummary(p) {
   const mode = boardMode(p);
   const sub = `${fmtNum(p.min_total_sub)}x`;
   if (mode === "sme") {
-    return `Board       SME\nGMP         ${fmtNum(gmpSme(p))}%\nSub         ${sub}`;
+    return [
+      t("labels.board_sme_line"),
+      t("labels.gmp_line", { value: `${fmtNum(gmpSme(p))}%` }),
+      t("labels.sub_line", { value: sub }),
+    ].join("\n");
   }
   if (mode === "both") {
-    return (
-      `Board       Mainboard + SME\n` +
-      `Main GMP    ${fmtNum(gmpMain(p))}%\n` +
-      `SME GMP     ${fmtNum(gmpSme(p))}%\n` +
-      `Sub         ${sub}`
-    );
+    return [
+      t("labels.board_both_line"),
+      t("labels.main_gmp_line", { value: `${fmtNum(gmpMain(p))}%` }),
+      t("labels.sme_gmp_line", { value: `${fmtNum(gmpSme(p))}%` }),
+      t("labels.sub_line", { value: sub }),
+    ].join("\n");
   }
-  return `Board       Mainboard\nGMP         ${fmtNum(gmpMain(p))}%\nSub         ${sub}`;
+  return [
+    t("labels.board_main_line"),
+    t("labels.gmp_line", { value: `${fmtNum(gmpMain(p))}%` }),
+    t("labels.sub_line", { value: sub }),
+  ].join("\n");
 }
 
 function esc(s) {
@@ -127,116 +151,99 @@ function esc(s) {
 }
 
 function prefsBlock(p) {
-  return `<b>Your filters</b>\n<code>${esc(prefsSummary(p))}</code>`;
+  return `<b>${t("labels.your_filters")}</b>\n<code>${esc(prefsSummary(p))}</code>`;
 }
 
 function welcomeText(p, channelId) {
   const channel = channelUrl(channelId);
+  const w = COPY.welcome;
   return [
-    "<b>IPODevta</b>",
-    "<i>IPO fills without the clutter.</i>",
+    w.title,
+    w.tagline,
     "",
-    "On closing days you get:",
-    "• A clear 👍 or 👎 for each issue",
-    "• GMP and subscription in one place",
-    "• Filters you control",
+    w.lead,
+    w.bullet_verdict,
+    w.bullet_numbers,
+    w.bullet_filters,
     "",
     prefsBlock(p),
     "",
-    RULE,
+    t("rule"),
     "",
-    "Use the buttons below. No typing needed.",
+    w.buttons_hint,
     "",
-    `Want closing-day GMP with no filters? <a href="${channel}">Join the public channel</a>`,
+    t("welcome.channel_invite", { channel }),
     "",
-    "Something off? Tap <b>Feedback</b>.",
+    w.feedback_hint,
     "",
-    "<i>Happy filing. All the best for allotments.</i>",
+    w.closing,
   ].join("\n");
 }
 
 function helpText(channelId) {
   const channel = channelUrl(channelId);
+  const h = COPY.help;
   return [
-    "<b>What you get</b>",
-    "",
-    "<b>Preview GMP</b>",
-    "Recent issues with your filters applied.",
-    "",
-    "<b>Settings</b>",
-    "Mainboard GMP, SME GMP, subscription floor, and which boards to include.",
-    "",
-    "<b>Channel</b>",
-    "One daily GMP list for every issue in the market. No personal filters.",
-    "",
-    "<b>Feedback</b>",
-    "Send a short note to the team.",
-    "",
-    RULE,
-    "",
-    `<a href="${channel}">Open the public channel</a>`,
-    "",
-    "<i>Grey-market premium is unofficial and can move quickly.\nInformation only - not investment advice. Read the RHP.</i>",
+    h.title,
+    h.sections,
+    h.check,
+    h.hidden,
+    h.actions,
+    h.feedback,
+    t("help.open_channel", { channel }),
+    `<blockquote expandable>${t("disclaimer.long")}</blockquote>`,
   ].join("\n");
 }
 
 function settingsText(p) {
   const mode = boardMode(p);
+  const s = COPY.settings;
   const hint =
-    mode === "sme"
-      ? "SME percentages are below. Subscription is under that."
-      : mode === "both"
-        ? "Mainboard percentages come first. SME percentages follow. Subscription is under both."
-        : "Mainboard percentages are below. Subscription is under that.";
+    mode === "sme" ? s.hint_sme : mode === "both" ? s.hint_both : s.hint_main;
   return [
-    "<b>Settings</b>",
+    s.title,
     "",
     prefsBlock(p),
     "",
     hint,
-    "Tap a percentage, or tap <b>Type %</b> and send a number.",
-    "Preview and closing-day notes use these filters.",
-    "The channel still posts one daily list for everyone.",
+    s.tap_hint,
+    s.filters_use,
+    s.channel_note,
   ].join("\n");
 }
 
 function gmpPrompt(which) {
   const sme = which === "sme";
   return [
-    `<b>${sme ? "SME GMP" : "Mainboard GMP"}</b>`,
+    sme ? t("gmp_prompt.title_sme") : t("gmp_prompt.title_main"),
     "",
-    `Send a percentage, for example <code>${sme ? "48" : "34"}</code>.`,
-    "Type <code>cancel</code> to stop.",
+    t("gmp_prompt.body", { example: sme ? "48" : "34" }),
+    t("gmp_prompt.cancel"),
   ].join("\n");
 }
 
 function channelText(channelId) {
   const url = channelUrl(channelId);
   const handle = url.replace("https://t.me/", "@");
+  const c = COPY.channel_invite;
   return [
-    "<b>Public channel</b>",
+    c.title,
     "",
-    "No personal filters here.",
+    c.no_filters,
     "",
-    "Once a day this channel posts a short GMP and subscription list for the issues in the market. No personal filters. One post, then it stays quiet until the next day.",
+    c.body,
     "",
-    RULE,
+    t("rule"),
     "",
-    `<a href="${url}">Join ${handle}</a>`,
+    t("channel_invite.join", { channel: url, handle }),
     "",
-    "Happy filing. All the best for allotments in the companies you care about.",
+    c.closing,
   ].join("\n");
 }
 
 function feedbackPrompt() {
-  return [
-    "<b>Feedback</b>",
-    "",
-    "Send your note in one message.",
-    "We will forward it to the team.",
-    "",
-    "Type <code>cancel</code> to stop.",
-  ].join("\n");
+  const f = COPY.feedback;
+  return [f.title, "", f.body, f.forward, "", f.cancel].join("\n");
 }
 
 function mainKeyboard() {
@@ -255,14 +262,14 @@ function homeInline(channelId) {
   return {
     inline_keyboard: [
       [
-        { text: "Preview GMP", callback_data: "preview" },
-        { text: "Settings", callback_data: "settings" },
+        { text: BTN.PREVIEW, callback_data: "preview" },
+        { text: BTN.SETTINGS, callback_data: "settings" },
       ],
       [
-        { text: "Help", callback_data: "help" },
-        { text: "Join channel", url: channelUrl(channelId) },
+        { text: BTN.HELP, callback_data: "help" },
+        { text: btn("join_channel"), url: channelUrl(channelId) },
       ],
-      [{ text: "Feedback", callback_data: "feedback" }],
+      [{ text: BTN.FEEDBACK, callback_data: "feedback" }],
     ],
   };
 }
@@ -277,7 +284,9 @@ function settingsInline(p) {
       callback_data: `gmp:${which}:${value}`,
     }));
     const custom = !presets.some((value) => nearly(current, value));
-    const typeLabel = prefix ? `Type ${prefix.trim()}` : "Type %";
+    const typeLabel = prefix
+      ? t("buttons.type_pct_prefixed", { prefix: prefix.trim() })
+      : btn("type_pct");
     buttons.push({
       text: mark(custom, custom ? `${prefix}${fmtNum(current)}%` : typeLabel),
       callback_data: `gmp:ask:${which}`,
@@ -297,18 +306,18 @@ function settingsInline(p) {
   }
   rows.push(
     SUB_PRESETS.map((value) => ({
-      text: mark(nearly(sub, value), `Sub ${value}x`),
+      text: mark(nearly(sub, value), t("buttons.sub_preset", { value: String(value) })),
       callback_data: `sub:${value}`,
     }))
   );
   rows.push([
-    { text: mark(mode === "main", "Mainboard"), callback_data: "board:main" },
-    { text: mark(mode === "sme", "SME"), callback_data: "board:sme" },
-    { text: mark(mode === "both", "Both"), callback_data: "board:both" },
+    { text: mark(mode === "main", btn("board_main")), callback_data: "board:main" },
+    { text: mark(mode === "sme", btn("board_sme")), callback_data: "board:sme" },
+    { text: mark(mode === "both", btn("board_both")), callback_data: "board:both" },
   ]);
   rows.push([
-    { text: "Preview GMP", callback_data: "preview" },
-    { text: "Home", callback_data: "home" },
+    { text: BTN.PREVIEW, callback_data: "preview" },
+    { text: btn("home"), callback_data: "home" },
   ]);
   return { inline_keyboard: rows };
 }
@@ -327,22 +336,23 @@ let profileSynced = false;
 
 async function ensureBotProfile(env) {
   if (profileSynced) return;
+  const c = COPY.commands;
   const commands = [
-    { command: "start", description: "Open IPODevta" },
-    { command: "preview", description: "See issues with your filters" },
-    { command: "settings", description: "Set GMP, subscription, board" },
-    { command: "help", description: "What you get" },
-    { command: "feedback", description: "Send a note to the team" },
+    { command: "start", description: c.start },
+    { command: "preview", description: c.preview },
+    { command: "settings", description: c.settings },
+    { command: "help", description: c.help },
+    { command: "feedback", description: c.feedback },
   ];
   await tg(env, "setMyCommands", { commands });
   await tg(env, "setMyShortDescription", {
-    short_description: SHORT_DESCRIPTION.slice(0, 120),
+    short_description: t("bot.short_description").slice(0, 120),
   });
   await tg(env, "setMyDescription", {
-    description: BOT_DESCRIPTION.slice(0, 512),
+    description: t("bot.description").slice(0, 512),
   });
   try {
-    await tg(env, "setMyName", { name: "IPODevta" });
+    await tg(env, "setMyName", { name: t("bot.name") });
   } catch (_) {
     // older bots may not support rename via API
   }
@@ -370,7 +380,7 @@ async function handleFeedbackMessage(env, chatId, text) {
     await env.PREFS.delete(`feedback:await:${chatId}`);
     await tg(env, "sendMessage", {
       chat_id: chatId,
-      text: "Feedback cancelled.",
+      text: t("feedback.cancelled"),
       reply_markup: mainKeyboard(),
     });
     return true;
@@ -382,15 +392,15 @@ async function handleFeedbackMessage(env, chatId, text) {
     await tg(env, "sendMessage", {
       chat_id: admin,
       text:
-        `<b>Feedback</b> from <code>${esc(String(chatId))}</code>\n` +
-        `${RULE}\n` +
+        t("labels.feedback_admin", { chat_id: esc(String(chatId)) }) +
+        `\n${t("rule")}\n` +
         esc(raw),
       parse_mode: "HTML",
     });
   }
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text: "Thanks. Your note was sent to the team.",
+    text: t("feedback.thanks"),
     reply_markup: homeInline(env.CHANNEL_ID),
     parse_mode: "HTML",
   });
@@ -420,7 +430,7 @@ async function savePrefs(env, chatId, prefs) {
   }
 }
 
-async function triggerPreview(env, chatId) {
+async function githubDispatch(env, eventType, payload) {
   const repo = env.GITHUB_REPO;
   const token = env.GITHUB_TOKEN;
   if (!repo || !token) return false;
@@ -433,11 +443,19 @@ async function triggerPreview(env, chatId) {
       "user-agent": "ipo-devta-worker",
     },
     body: JSON.stringify({
-      event_type: "preview",
-      client_payload: { chat_id: String(chatId) },
+      event_type: eventType,
+      client_payload: payload || {},
     }),
   });
   return resp.status === 204;
+}
+
+async function triggerPreview(env, chatId) {
+  return githubDispatch(env, "preview", { chat_id: String(chatId) });
+}
+
+async function triggerAlert(env) {
+  return githubDispatch(env, "alert", { source: "worker-cron" });
 }
 
 async function sendHome(env, chatId) {
@@ -451,7 +469,7 @@ async function sendHome(env, chatId) {
   });
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text: "<b>Quick actions</b>",
+    text: t("labels.quick_actions_html"),
     parse_mode: "HTML",
     reply_markup: homeInline(env.CHANNEL_ID),
   });
@@ -492,7 +510,7 @@ async function sendChannel(env, chatId) {
     parse_mode: "HTML",
     disable_web_page_preview: true,
     reply_markup: {
-      inline_keyboard: [[{ text: "Join channel", url }]],
+      inline_keyboard: [[{ text: btn("join_channel"), url }]],
     },
   });
 }
@@ -554,13 +572,15 @@ async function sendCachedPreview(env, chatId, cached) {
     Math.round((Date.now() - Number(cached.ts || Date.now())) / 60000)
   );
   const header =
-    `<b>Saved preview</b>\n` +
-    `<i>Retrieved from cache · about ${ageMin} min old</i>\n` +
-    `${RULE}\n\n`;
+    `${t("preview.saved_title")}\n` +
+    `${t("preview.saved_age", { age: String(ageMin) })}\n` +
+    `${t("rule")}\n\n`;
   let body = cached.text || "";
-  // Avoid duplicating if already a full message
   const text = header + body;
-  const finalText = text.length > 4000 ? text.slice(0, 3900) + "\n\n…truncated." : text;
+  const finalText =
+    text.length > 4000
+      ? text.slice(0, 3900) + "\n\n" + t("messages.truncated")
+      : text;
   await tg(env, "sendMessage", {
     chat_id: chatId,
     text: finalText,
@@ -579,7 +599,7 @@ async function sendPreviewAck(env, chatId, callbackQueryId) {
     if (callbackQueryId) {
       await tg(env, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
-        text: "Showing saved preview",
+        text: t("preview.toast_saved"),
       });
     }
     await sendCachedPreview(env, chatId, cached);
@@ -588,13 +608,11 @@ async function sendPreviewAck(env, chatId, callbackQueryId) {
 
   if (await previewLocked(env, chatId)) {
     const waitMsg =
-      "<b>Preview in progress</b>\n\n" +
-      "Your last request is still running.\n" +
-      "Please wait about <b>1 minute</b> before tapping again.";
+      t("preview.in_progress_title") + "\n\n" + t("preview.in_progress_body");
     if (callbackQueryId) {
       await tg(env, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
-        text: "Please wait ~1 min - preview still running",
+        text: t("preview.toast_wait"),
         show_alert: true,
       });
     }
@@ -612,27 +630,26 @@ async function sendPreviewAck(env, chatId, callbackQueryId) {
   if (callbackQueryId) {
     await tg(env, "answerCallbackQuery", {
       callback_query_id: callbackQueryId,
-      text: ok ? "Fetching fresh preview…" : "Preview unavailable",
+      text: ok ? t("preview.toast_fetching") : t("preview.toast_unavailable"),
     });
   }
   await tg(env, "sendMessage", {
     chat_id: chatId,
     text: ok
       ? [
-          "<b>Preview GMP</b>",
+          t("preview.fetching_title"),
           "",
-          "Fetching fresh scores with your filters…",
+          t("preview.fetching_body"),
           "",
-          RULE,
+          t("rule"),
           "",
-          "<i>Usually under 1 minute.</i>",
-          "After it arrives, you can open it again instantly from the saved copy.",
+          t("preview.fetching_eta"),
+          t("preview.fetching_hint"),
         ].join("\n")
       : [
-          "<b>Preview GMP</b>",
+          t("preview.fetching_title"),
           "",
-          "Temporarily unavailable.",
-          "Try again in a minute, or wait for the next market scan.",
+          t("preview.unavailable_body"),
         ].join("\n"),
     parse_mode: "HTML",
     reply_markup: homeInline(env.CHANNEL_ID),
@@ -661,7 +678,7 @@ async function handleCustomGmp(env, chatId, raw) {
   if (val == null) {
     await tg(env, "sendMessage", {
       chat_id: chatId,
-      text: `${gmpPrompt(which)}\n\nSend a number from 0 to 300, or <code>cancel</code>.`,
+      text: `${gmpPrompt(which)}\n\n${t("gmp_prompt.retry")}`,
       parse_mode: "HTML",
       reply_markup: mainKeyboard(),
     });
@@ -672,10 +689,14 @@ async function handleCustomGmp(env, chatId, raw) {
   await savePrefs(env, chatId, prefs);
   await env.PREFS.delete(`gmp:await:${chatId}`);
   await clearPreviewCache(env, chatId);
-  const label = which === "sme" ? "SME" : "Mainboard";
+  const label = which === "sme" ? t("labels.sme") : t("labels.mainboard");
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text: `<b>Saved</b>\n${label} GMP ${val}%\n\n${prefsBlock(prefs)}`,
+    text: t("messages.saved_gmp", {
+      label,
+      value: String(val),
+      prefs: prefsBlock(prefs),
+    }),
     parse_mode: "HTML",
     disable_web_page_preview: true,
     reply_markup: settingsInline(prefs),
@@ -707,7 +728,7 @@ async function handleText(env, chatId, text) {
 
   await tg(env, "sendMessage", {
     chat_id: chatId,
-    text: "Use the buttons below.\nPreview GMP · Settings · Help · Channel · Feedback",
+    text: t("messages.use_buttons_worker"),
     reply_markup: mainKeyboard(),
   });
 }
@@ -726,15 +747,15 @@ async function handleCallback(env, cb) {
     });
 
   if (["home", "menu", "start"].includes(data)) {
-    await answer("Home");
+    await answer(t("toasts.home"));
     return sendHome(env, chatId);
   }
   if (data === "help") {
-    await answer("Help");
+    await answer(t("toasts.help"));
     return sendHelp(env, chatId);
   }
   if (data === "settings") {
-    await answer("Settings");
+    await answer(t("toasts.settings"));
     return sendSettings(env, chatId, messageId);
   }
   if (data === "channel") {
@@ -745,7 +766,7 @@ async function handleCallback(env, cb) {
     return sendPreviewAck(env, chatId, cb.id);
   }
   if (data === "feedback") {
-    await answer("Feedback");
+    await answer(t("toasts.feedback"));
     return beginFeedback(env, chatId);
   }
 
@@ -754,7 +775,7 @@ async function handleCallback(env, cb) {
     if (parts.length === 3 && parts[1] === "ask" && (parts[2] === "main" || parts[2] === "sme")) {
       const which = parts[2];
       await env.PREFS.put(`gmp:await:${chatId}`, which, { expirationTtl: 600 });
-      await answer(which === "sme" ? "Send SME %" : "Send mainboard %");
+      await answer(which === "sme" ? t("toasts.send_sme_pct") : t("toasts.send_main_pct"));
       await tg(env, "sendMessage", {
         chat_id: chatId,
         text: gmpPrompt(which),
@@ -767,7 +788,7 @@ async function handleCallback(env, cb) {
     if (parts.length === 3 && (parts[1] === "main" || parts[1] === "sme")) which = parts[1];
     const val = parsePct(parts[parts.length - 1]);
     if (val == null) {
-      await answer("Invalid GMP");
+      await answer(t("toasts.invalid_gmp"));
       return;
     }
     const prefs = await getPrefs(env, chatId);
@@ -775,8 +796,8 @@ async function handleCallback(env, cb) {
     await savePrefs(env, chatId, prefs);
     await env.PREFS.delete(`gmp:await:${chatId}`);
     await clearPreviewCache(env, chatId);
-    const label = which === "sme" ? "SME" : "Mainboard";
-    await answer(`${label} GMP → ${val}%`);
+    const label = which === "sme" ? t("labels.sme") : t("labels.mainboard");
+    await answer(t("toasts.gmp_saved", { label, value: String(val) }));
     return sendSettings(env, chatId, messageId);
   }
   if (data.startsWith("sub:")) {
@@ -785,7 +806,7 @@ async function handleCallback(env, cb) {
     prefs.min_total_sub = val;
     await savePrefs(env, chatId, prefs);
     await clearPreviewCache(env, chatId);
-    await answer(`Min sub → ${val}x`);
+    await answer(t("toasts.sub_saved", { value: String(val) }));
     return sendSettings(env, chatId, messageId);
   }
   if (data.startsWith("board:")) {
@@ -796,12 +817,16 @@ async function handleCallback(env, cb) {
     await savePrefs(env, chatId, prefs);
     await env.PREFS.delete(`gmp:await:${chatId}`);
     await clearPreviewCache(env, chatId);
-    const toast = { main: "Mainboard only", sme: "SME only", both: "Mainboard + SME" }[mode];
+    const toast = {
+      main: t("toasts.board_main"),
+      sme: t("toasts.board_sme"),
+      both: t("toasts.board_both"),
+    }[mode];
     await answer(toast);
     return sendSettings(env, chatId, messageId);
   }
 
-  await answer("Unknown action");
+  await answer(t("toasts.unknown"));
 }
 
 /** Export all prefs for Actions (Authorization: Bearer EXPORT_SECRET). */
@@ -904,5 +929,13 @@ export default {
     }
 
     return new Response("ok");
+  },
+
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(
+      triggerAlert(env).then((ok) => {
+        console.log("alert dispatch", ok ? "ok" : "failed");
+      })
+    );
   },
 };
