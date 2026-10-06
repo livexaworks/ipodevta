@@ -1,5 +1,5 @@
 {
-  "fetched_at": "2026-10-06T01:20:19+05:30",
+  "fetched_at": "2026-10-06T17:43:59+05:30",
   "date": "2026-10-06",
   "path": "/ipos",
   "params": {
@@ -29,8 +29,8 @@
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-05T19:42:03.000000Z",
-      "gmp_updated_label": "06 Oct 2026, 01:12 AM IST",
+      "gmp_updated_at": "2026-10-06T11:54:14.000000Z",
+      "gmp_updated_label": "06 Oct 2026, 05:24 PM IST",
       "source": "ipoguru"
     },
     {
@@ -44,17 +44,17 @@
       "open_date": "2026-09-30",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/tna-solutions-sme-ipo",
-      "gmp": 10.0,
-      "gmp_pct": 14.29,
+      "gmp": 3.0,
+      "gmp_pct": 4.29,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 2.85,
+      "sub_total": 51.39,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-05T19:42:03.000000Z",
-      "gmp_updated_label": "06 Oct 2026, 01:12 AM IST",
+      "gmp_updated_at": "2026-10-06T11:54:13.000000Z",
+      "gmp_updated_label": "06 Oct 2026, 05:24 PM IST",
       "source": "ipoguru"
     },
     {
@@ -68,17 +68,17 @@
       "open_date": "2026-09-30",
       "ipo_no": null,
       "web_url": "https://www.ipoguru.in/ipo/acme-india-industries-sme-ipo",
-      "gmp": 40.0,
-      "gmp_pct": 20.41,
+      "gmp": 62.0,
+      "gmp_pct": 31.63,
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 3.56,
+      "sub_total": 115.51,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-05T19:42:03.000000Z",
-      "gmp_updated_label": "06 Oct 2026, 01:12 AM IST",
+      "gmp_updated_at": "2026-10-06T11:54:13.000000Z",
+      "gmp_updated_label": "06 Oct 2026, 05:24 PM IST",
       "source": "ipoguru"
     },
     {
@@ -97,12 +97,12 @@
       "n_sources": 1,
       "spread_pct": 0.0,
       "confidence": "high",
-      "sub_total": 1.49,
+      "sub_total": 1.83,
       "sub_qib": null,
       "sub_nii": null,
       "sub_retail": null,
-      "gmp_updated_at": "2026-10-05T19:42:03.000000Z",
-      "gmp_updated_label": "06 Oct 2026, 01:12 AM IST",
+      "gmp_updated_at": "2026-10-06T11:54:11.000000Z",
+      "gmp_updated_label": "06 Oct 2026, 05:24 PM IST",
       "source": "ipoguru"
     }
   ]
