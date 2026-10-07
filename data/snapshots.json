@@ -4150,5 +4150,29 @@
     "sub_retail": null,
     "sub_source": null,
     "source": "hybrid"
+  },
+  {
+    "ipo_id": "rkfashion-accessories-sme-ipo",
+    "slug": "rkfashion-accessories-sme-ipo",
+    "ts": "2026-10-07T17:30:57+05:30",
+    "date": "2026-10-07",
+    "name": "R.K.Fashion Accessories",
+    "board": "SME",
+    "price_high": 82.0,
+    "lot_size": 1600,
+    "close_date": "2026-10-07",
+    "ipo_no": null,
+    "web_url": "https://www.ipoguru.in/ipo/rkfashion-accessories-sme-ipo",
+    "gmp": 1.5,
+    "gmp_pct": 1.83,
+    "n_sources": 1,
+    "spread_pct": 0.0,
+    "confidence": "high",
+    "sub_total": 0.0,
+    "sub_qib": null,
+    "sub_nii": null,
+    "sub_retail": null,
+    "sub_source": null,
+    "source": "hybrid"
   }
 ]
