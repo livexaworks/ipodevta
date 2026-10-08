@@ -1,18 +1,14 @@
-"""IPO Guru Data API v2 — calendar + GMP (server-side only).
+"""IPO Guru Data API v2: open IPO calendar with GMP (server-side only).
 
-Hybrid bot layout:
-  - This module: open IPO list + GMP (free plan: 10 req/day, 1/min)
-  - bot/sources/bse.py: QIB/NII/Retail from BSE public APIs (no Guru quota)
-
-Prefer one GET /ipos?status=open per collect. Preview/commands use disk cache
-and do not call the network. Never put the API key in browser/Worker/client code.
+Free plan: 10 requests/day, 1/minute. The bot makes one GET /ipos?status=open
+per scheduled run (9:30 channel, 14:30 bot), so 2 calls on a normal day.
+Subscription by category comes from BSE (bot/sources/bse.py), not from here.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -26,8 +22,7 @@ log = logging.getLogger(__name__)
 
 USAGE_PATH = config.DATA_DIR / "ipoguru_usage.json"
 CACHE_PATH = config.DATA_DIR / "ipoguru_cache.json"
-
-SOURCE = "ipoguru"
+FREE_PLAN_DAILY = 10
 
 
 class IpoGuruError(RuntimeError):
@@ -38,31 +33,20 @@ class BudgetExceeded(IpoGuruError):
     pass
 
 
-class RateLimited(IpoGuruError):
-    pass
-
-
 def api_key() -> str:
-    config.load_dotenv()
-    return os.environ.get("IPOGURU_API_KEY", "").strip()
+    return config.env("IPOGURU_API_KEY")
 
 
 def base_url() -> str:
-    config.load_dotenv()
-    return (
-        os.environ.get("IPOGURU_BASE_URL", "").strip()
-        or "https://www.ipoguru.in/api/v2"
-    ).rstrip("/")
+    return (config.env("IPOGURU_BASE_URL") or "https://www.ipoguru.in/api/v2").rstrip("/")
 
 
 def max_requests_per_day() -> int:
-    config.load_dotenv()
-    raw = os.environ.get("IPOGURU_MAX_REQUESTS_PER_DAY", "10").strip()
     try:
-        n = int(raw)
+        n = int(config.env("IPOGURU_MAX_REQUESTS_PER_DAY", str(FREE_PLAN_DAILY)))
     except ValueError:
-        n = 10
-    return max(1, min(n, 10))  # free-plan ceiling
+        n = FREE_PLAN_DAILY
+    return max(1, min(n, FREE_PLAN_DAILY))
 
 
 def _parse_number(val: Any) -> float | None:
@@ -70,23 +54,15 @@ def _parse_number(val: Any) -> float | None:
         return None
     if isinstance(val, (int, float)):
         return float(val)
-    text = str(val).strip()
+    text = str(val).strip().replace("₹", "").replace(",", "").replace("%", "")
     if not text or text.lower() in ("nan", "na", "n/a", "-", "—", "–"):
         return None
-    text = text.replace("₹", "").replace(",", "").replace("%", "")
     m = re.search(r"[-+]?\d+(?:\.\d+)?", text)
-    if not m:
-        return None
-    try:
-        return float(m.group(0))
-    except ValueError:
-        return None
+    return float(m.group(0)) if m else None
 
 
 def _map_board(ipo_type: Any) -> str | None:
-    if ipo_type is None:
-        return None
-    t = str(ipo_type).strip().lower()
+    t = str(ipo_type or "").strip().lower()
     if t in ("mainboard", "main board", "main"):
         return "MAIN"
     if t == "sme":
@@ -95,16 +71,13 @@ def _map_board(ipo_type: Any) -> str | None:
 
 
 def normalize_row(row: dict[str, Any]) -> dict[str, Any] | None:
-    """Map one /ipos calendar item into the bot's snapshot/IPO shape."""
+    """Map one /ipos calendar item into the bot's IPO shape."""
     slug = (row.get("slug") or "").strip()
-    if not slug:
-        return None
     board = _map_board(row.get("type"))
-    if board is None:
+    if not slug or board is None:
         return None
 
-    name = (row.get("display_name") or row.get("name") or slug).strip()
-    price_high = row.get("price_max")
+    price_high = _parse_number(row.get("price_max"))
     if price_high is None:
         price_high = _parse_number(row.get("issue_price"))
     if price_high is None:
@@ -114,35 +87,24 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any] | None:
     gmp_val = _parse_number(gmp_block.get("price"))
     gmp_pct = _parse_number(gmp_block.get("percentage"))
     if gmp_pct is None and gmp_val is not None and price_high:
-        gmp_pct = round(gmp_val / float(price_high) * 100, 2)
-
-    # Authoritative licensed feed → treat as high confidence (single source).
-    has_gmp = gmp_val is not None
-    confidence = "high" if has_gmp else None
+        gmp_pct = round(gmp_val / price_high * 100, 2)
 
     return {
         "ipo_id": slug,
-        "slug": slug,
-        "name": name,
+        "name": (row.get("display_name") or row.get("name") or slug).strip(),
         "board": board,
-        "price_high": float(price_high) if price_high is not None else None,
-        "lot_size": row.get("lot_size"),
-        "close_date": row.get("close_date"),
+        "price_high": price_high,
         "open_date": row.get("open_date"),
-        "ipo_no": None,
-        "web_url": row.get("web_url"),
+        "close_date": row.get("close_date"),
         "gmp": gmp_val,
         "gmp_pct": gmp_pct,
-        "n_sources": 1 if has_gmp else 0,
-        "spread_pct": 0.0 if has_gmp else None,
-        "confidence": confidence,
+        "gmp_updated_label": gmp_block.get("updated_at_label"),
         "sub_total": _parse_number(row.get("subscription_total")),
-        "sub_qib": None,  # category book is Standard+ on IPO Guru
+        "sub_qib": None,
         "sub_nii": None,
         "sub_retail": None,
-        "gmp_updated_at": gmp_block.get("updated_at"),
-        "gmp_updated_label": gmp_block.get("updated_at_label"),
-        "source": SOURCE,
+        "sub_source": "ipoguru",
+        "web_url": row.get("web_url"),
     }
 
 
@@ -151,177 +113,114 @@ def _load_json(path: Path) -> dict[str, Any] | None:
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
 
 
 def _save_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def _usage_today() -> dict[str, Any]:
+def usage_today() -> dict[str, Any]:
     today = config.today_ist()
     data = _load_json(USAGE_PATH) or {}
     if data.get("date") != today:
-        return {"date": today, "requests": 0, "last_ts": 0.0, "paths": []}
+        return {"date": today, "requests": 0, "last_ts": 0.0}
     return {
         "date": today,
         "requests": int(data.get("requests") or 0),
         "last_ts": float(data.get("last_ts") or 0),
-        "paths": list(data.get("paths") or []),
     }
 
 
 def usage_remaining() -> int:
-    u = _usage_today()
-    return max(0, max_requests_per_day() - int(u["requests"]))
+    return max(0, max_requests_per_day() - usage_today()["requests"])
 
 
-def load_cached_ipos() -> list[dict[str, Any]] | None:
-    """Return last successful normalized IPO list (any day), or None."""
-    data = _load_json(CACHE_PATH)
-    if not data:
-        return None
-    rows = data.get("ipos")
-    if not isinstance(rows, list) or not rows:
-        return None
-    return rows
-
-
-def _save_cache(raw: dict[str, Any], ipos: list[dict[str, Any]]) -> None:
-    _save_json(
-        CACHE_PATH,
-        {
-            "fetched_at": config.format_ist(),
-            "date": config.today_ist(),
-            "path": "/ipos",
-            "params": {"status": "open"},
-            "count": len(ipos),
-            "raw_count": raw.get("count"),
-            "plan": raw.get("plan"),
-            "ipos": ipos,
-        },
-    )
-
-
-def _record_usage(path: str) -> None:
-    u = _usage_today()
-    u["requests"] = int(u["requests"]) + 1
+def _record_usage() -> None:
+    u = usage_today()
+    u["requests"] += 1
     u["last_ts"] = time.time()
-    paths = list(u.get("paths") or [])
-    paths.append({"path": path, "ts": config.format_ist()})
-    u["paths"] = paths[-20:]
     _save_json(USAGE_PATH, u)
 
 
-def _wait_for_minute_budget(last_ts: float) -> None:
-    """Free plan: 1 request / minute."""
-    if not last_ts:
-        return
-    elapsed = time.time() - last_ts
-    if elapsed < 61:
-        wait = 61 - elapsed
-        log.info("IPO Guru: waiting %.0fs for 1/min limit", wait)
-        time.sleep(wait)
+def _today_cache() -> list[dict[str, Any]] | None:
+    data = _load_json(CACHE_PATH)
+    if not data or data.get("date") != config.today_ist():
+        return None
+    rows = data.get("ipos")
+    return rows if isinstance(rows, list) else None
 
 
-def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+def _get(path: str, params: dict[str, Any]) -> dict[str, Any]:
     key = api_key()
     if not key:
         raise IpoGuruError("IPOGURU_API_KEY is not set")
 
-    u = _usage_today()
-    if int(u["requests"]) >= max_requests_per_day():
+    u = usage_today()
+    if u["requests"] >= max_requests_per_day():
         raise BudgetExceeded(
-            f"IPO Guru daily budget exhausted "
-            f"({u['requests']}/{max_requests_per_day()} on {u['date']} IST). "
-            "Using cache only until midnight IST."
+            f"daily budget used ({u['requests']}/{max_requests_per_day()} on {u['date']} IST)"
         )
+    elapsed = time.time() - u["last_ts"]
+    if u["last_ts"] and elapsed < 61:
+        log.info("IPO Guru: waiting %.0fs for the 1/min limit", 61 - elapsed)
+        time.sleep(61 - elapsed)
 
-    _wait_for_minute_budget(float(u.get("last_ts") or 0))
-
-    url = f"{base_url()}{path}"
-    headers = {
-        "X-API-KEY": key,
-        "Accept": "application/json",
-        "User-Agent": config.USER_AGENT,
-    }
-    log.info("IPO Guru GET %s params=%s (used %s/%s today)", path, params, u["requests"], max_requests_per_day())
-    resp = requests.get(url, headers=headers, params=params or {}, timeout=30)
-
-    # Count the attempt toward budget even on errors (provider meters them).
-    _record_usage(path)
+    log.info("IPO Guru GET %s %s (used %d/%d today)", path, params, u["requests"], max_requests_per_day())
+    resp = requests.get(
+        f"{base_url()}{path}",
+        headers={"X-API-KEY": key, "Accept": "application/json", "User-Agent": config.USER_AGENT},
+        params=params,
+        timeout=30,
+    )
+    _record_usage()  # the provider meters failed attempts too
 
     if resp.status_code == 429:
-        retry = resp.headers.get("Retry-After", "?")
-        raise RateLimited(f"429 rate limited; Retry-After={retry}")
+        raise IpoGuruError(f"429 rate limited; Retry-After={resp.headers.get('Retry-After', '?')}")
     if resp.status_code == 401:
-        raise IpoGuruError("401 unauthorized — check IPOGURU_API_KEY")
-    if resp.status_code == 402:
-        raise IpoGuruError(f"402 plan scope required: {resp.text[:300]}")
+        raise IpoGuruError("401 unauthorized: check IPOGURU_API_KEY")
     if resp.status_code >= 400:
         raise IpoGuruError(f"HTTP {resp.status_code}: {resp.text[:300]}")
-
     try:
         payload = resp.json()
-    except Exception as exc:  # noqa: BLE001
+    except ValueError as exc:
         raise IpoGuruError("malformed JSON response") from exc
-
     if not isinstance(payload, dict) or not payload.get("success"):
         raise IpoGuruError(f"API success=false: {str(payload)[:300]}")
-
-    remaining = resp.headers.get("X-RateLimit-Remaining")
-    if remaining is not None:
-        log.info("IPO Guru X-RateLimit-Remaining=%s", remaining)
     return payload
 
 
-def fetch_open_ipos(*, allow_network: bool = True) -> list[dict[str, Any]]:
-    """
-    Open IPO calendar with GMP (one request when allow_network=True).
-
-    Preview / commands must pass allow_network=False and rely on disk cache
-    written by alert/snapshot — keeps us at 2 scheduled calls/day.
-    """
-    if not allow_network:
-        cached = load_cached_ipos()
-        if cached is None:
-            raise IpoGuruError("No IPO Guru cache yet; wait for the next alert/snapshot run")
-        log.info("IPO Guru: using disk cache (%d IPOs, no network)", len(cached))
-        return cached
-
+def fetch_open_ipos() -> list[dict[str, Any]]:
+    """Open IPOs with GMP. One network call; reuses today's cache if the budget is spent."""
     try:
-        raw = _get("/ipos", {"status": "open", "months": 3})
+        raw = _get("/ipos", {"status": "open"})
     except BudgetExceeded:
-        cached = load_cached_ipos()
-        if cached is not None:
-            log.warning("IPO Guru budget hit — falling back to disk cache (%d IPOs)", len(cached))
-            return cached
-        raise
+        cached = _today_cache()
+        if cached is None:
+            raise
+        log.warning("IPO Guru budget spent: reusing today's cache (%d IPOs)", len(cached))
+        return cached
 
     data = raw.get("data")
     if not isinstance(data, list):
         raise IpoGuruError("/ipos missing data array")
 
-    ipos: list[dict[str, Any]] = []
+    ipos = []
     for row in data:
         if not isinstance(row, dict):
             continue
-        status = str(row.get("status") or "").strip().lower()
-        if status and status != "open":
+        if str(row.get("status") or "").strip().lower() not in ("", "open"):
             continue
         norm = normalize_row(row)
         if norm:
             ipos.append(norm)
 
-    if not ipos:
-        raise IpoGuruError("/ipos returned zero open equity IPOs")
-
-    _save_cache(raw, ipos)
+    _save_json(
+        CACHE_PATH,
+        {"fetched_at": config.format_ist(), "date": config.today_ist(), "count": len(ipos), "ipos": ipos},
+    )
     log.info("IPO Guru: %d open IPOs (plan=%s)", len(ipos), raw.get("plan"))
     return ipos

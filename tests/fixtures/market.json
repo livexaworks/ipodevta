@@ -1,0 +1,65 @@
+[
+  {
+    "ipo_id": "vishal-nirmiti-ipo",
+    "name": "Vishal Nirmiti",
+    "board": "MAIN",
+    "price_high": 220.0,
+    "open_date": "2026-10-06",
+    "close_date": "2026-10-08",
+    "gmp": 80.0,
+    "gmp_pct": 36.36,
+    "sub_total": 2.4,
+    "sub_qib": 3.1,
+    "sub_nii": 1.2,
+    "sub_retail": 2.0,
+    "sub_source": "bse"
+  },
+  {
+    "ipo_id": "nityas-gems-jewellery-ipo",
+    "name": "Nityas Gems & Jewellery Limited",
+    "board": "MAIN",
+    "price_high": 75.0,
+    "open_date": "2026-10-07",
+    "close_date": "2026-10-09",
+    "gmp": 3.0,
+    "gmp_pct": 4.0,
+    "sub_total": 0.69,
+    "sub_source": "ipoguru"
+  },
+  {
+    "ipo_id": "eventions-sme-ipo",
+    "name": "Eventions",
+    "board": "SME",
+    "price_high": 118.0,
+    "open_date": "2026-10-08",
+    "close_date": "2026-10-12",
+    "gmp": 65.0,
+    "gmp_pct": 55.08,
+    "sub_total": null,
+    "sub_source": "ipoguru"
+  },
+  {
+    "ipo_id": "rkfashion-accessories-sme-ipo",
+    "name": "R.K.Fashion Accessories",
+    "board": "SME",
+    "price_high": 82.0,
+    "open_date": "2026-10-05",
+    "close_date": "2026-10-07",
+    "gmp": 1.5,
+    "gmp_pct": 1.83,
+    "sub_total": 0.0,
+    "sub_source": "ipoguru"
+  },
+  {
+    "ipo_id": "no-gmp-yet-ipo",
+    "name": "No GMP Yet Industries",
+    "board": "MAIN",
+    "price_high": null,
+    "open_date": "2026-10-08",
+    "close_date": "2026-10-10",
+    "gmp": null,
+    "gmp_pct": null,
+    "sub_total": null,
+    "sub_source": "ipoguru"
+  }
+]

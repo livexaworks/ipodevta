@@ -13,52 +13,39 @@ WORKER = ROOT / "workers" / "telegram" / "worker.js"
 COPY_JS = ROOT / "workers" / "telegram" / "copy.js"
 
 
-def test_copy_loads_and_templates():
-    assert copy.t("buttons.preview") == "Preview GMP"
-    assert copy.t("reasons.GMP_BELOW", actual=22, required=48) == "GMP 22%, needs 48%"
-    assert copy.t("footer.data", hhmm="10:55").startswith("Data 10:55 IST")
+def test_templates_fill():
+    assert copy.t("card.price", price="₹220") == "💰 Price ₹220"
+    assert copy.t("card.sub", sub="2x", when="live 2:30 PM") == "📊 Subscription 2x (live 2:30 PM)"
 
 
 def test_worker_copy_js_matches_shared():
     """Regenerate with: python workers/telegram/sync_copy.py"""
     shared = json.loads((ROOT / "shared" / "copy.json").read_text(encoding="utf-8"))
     text = COPY_JS.read_text(encoding="utf-8")
-    assert text.startswith("// AUTO-GENERATED")
-    # Extract the exported object
-    start = text.index("export default ") + len("export default ")
-    payload = text[start:].strip()
-    if payload.endswith(";"):
-        payload = payload[:-1]
-    inline = json.loads(payload)
-    assert inline == shared
+    payload = text[text.index("export default ") + len("export default "):].strip().rstrip(";")
+    assert json.loads(payload) == shared
 
 
-def test_worker_js_has_no_user_facing_string_literals():
-    """Worker must pull Telegram copy from COPY / t() / btn(), not hardcode it."""
+def test_worker_has_no_hardcoded_user_copy():
+    src = re.sub(r"/\*.*?\*/|//.*?$", "", WORKER.read_text(encoding="utf-8"), flags=re.S | re.M)
+    for phrase in ("Check now", "Your filters", "No IPO passed", "Today's IPOs", "not investment advice"):
+        assert phrase not in src, f"user-facing literal in worker.js: {phrase!r}"
+
+
+def test_worker_and_python_defaults_match():
+    from bot import config
+
     src = WORKER.read_text(encoding="utf-8")
-    # Strip block comments and line comments roughly
-    stripped = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    stripped = re.sub(r"//.*?$", "", stripped, flags=re.M)
+    m = re.search(r"const DEFAULTS = \{ board: \"(\w+)\", min_gmp_main: (\d+), min_gmp_sme: (\d+), min_total_sub: (\d+) \}", src)
+    assert m, "DEFAULTS line changed shape"
+    assert m.group(1) == config.DEFAULT_BOARD
+    assert float(m.group(2)) == config.MIN_GMP_MAIN
+    assert float(m.group(3)) == config.MIN_GMP_SME
+    assert float(m.group(4)) == config.MIN_TOTAL_SUB
 
-    banned = [
-        "Preview GMP",
-        "Your filters",
-        "On closing days",
-        "Grey-market premium",
-        "Saved preview",
-        "Fetching fresh",
-        "Mainboard only",
-        "Join channel",
-        "What you get",
-        "Daily Brief",
-        "Quick actions",
-        "Feedback cancelled",
-        "not investment advice",
-        "Closing today ·",
-    ]
-    for phrase in banned:
-        assert phrase not in stripped, f"user-facing literal still in worker.js: {phrase!r}"
 
-    assert 'import COPY from "./copy.js"' in src
-    assert 'githubDispatch(env, "alert"' in src or 'eventType' in src
-    assert "async scheduled" in src
+def test_worker_crons_match_wrangler():
+    toml = (ROOT / "workers" / "telegram" / "wrangler.toml").read_text(encoding="utf-8")
+    src = WORKER.read_text(encoding="utf-8")
+    for cron in ("0 4 * * 1-5", "0 9 * * 1-5"):
+        assert f'"{cron}"' in toml and f'"{cron}"' in src

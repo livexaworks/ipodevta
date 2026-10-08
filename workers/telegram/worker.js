@@ -1,38 +1,29 @@
 /**
- * IPO Devta - instant Telegram webhook (Cloudflare Worker).
+ * IPODevta - Telegram webhook + schedule trigger (Cloudflare Worker, free plan).
  *
- * Handles fixed replies immediately: Start, Help, Settings, Channel, filter taps.
- * Preview acknowledges instantly, then triggers GitHub Actions for the heavy fetch.
+ * - Webhook: Start, Check now, Settings, Channel, Help, Feedback (instant replies).
+ * - Check now: filters the latest cards that GitHub Actions pushed to KV (POST /market).
+ * - Cron: 9:30 IST dispatches the `channel` run, 14:30 IST dispatches the `bot` run.
  *
  * User-facing strings come from shared/copy.json (synced to ./copy.js).
- *
- * Bindings / secrets:
- *   KV namespace binding: PREFS
- *   Secrets: TELEGRAM_TOKEN, CHANNEL_ID, GITHUB_TOKEN, GITHUB_REPO (owner/name)
+ * KV binding: PREFS. Secrets: TELEGRAM_TOKEN, CHANNEL_ID, ADMIN_CHAT_ID,
+ * WEBHOOK_SECRET, EXPORT_SECRET, GITHUB_TOKEN, GITHUB_REPO (owner/name).
  */
 
 import COPY from "./copy.js";
 
-const DEFAULTS = {
-  board: "main",
-  min_gmp_main: 34.0,
-  min_gmp_sme: 48.0,
-  min_gmp_pct: 34.0,
-  min_total_sub: 1.0,
-  include_sme: false,
-};
-
+const DEFAULTS = { board: "main", min_gmp_main: 34, min_gmp_sme: 48, min_total_sub: 1 };
 const MAIN_PRESETS = [24, 30, 34, 40, 50];
 const SME_PRESETS = [40, 45, 48, 55, 60];
 const SUB_PRESETS = [1, 2, 5];
+const MAX_CHECK_CARDS = 20;
+const CRON_EVENTS = { "0 4 * * 1-5": "channel", "0 9 * * 1-5": "bot" };
 
-const PREVIEW_COOLDOWN_SEC = 60;
-const PREVIEW_CACHE_TTL_SEC = 45 * 60;
+// ---------------------------------------------------------------- copy
 
 function t(path, vars) {
-  const parts = path.split(".");
   let cur = COPY;
-  for (const p of parts) {
+  for (const p of path.split(".")) {
     if (cur == null || typeof cur !== "object" || !(p in cur)) {
       throw new Error(`copy path not found: ${path}`);
     }
@@ -40,253 +31,189 @@ function t(path, vars) {
   }
   let text = String(cur);
   if (vars) {
-    text = text.replace(/\{(\w+)\}/g, (_, key) =>
-      vars[key] == null ? `{${key}}` : String(vars[key])
-    );
+    text = text.replace(/\{(\w+)\}/g, (m, key) => (vars[key] == null ? m : String(vars[key])));
   }
   return text;
 }
 
-function btn(key) {
-  return t(`buttons.${key}`);
+const btn = (key) => t(`buttons.${key}`);
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-const BTN = {
-  PREVIEW: btn("preview"),
-  SETTINGS: btn("settings"),
-  HELP: btn("help"),
-  CHANNEL: btn("channel"),
-  FEEDBACK: btn("feedback"),
-};
-
-function channelUrl(channelId) {
-  const cid = (channelId || "@ipodevta").trim();
-  if (cid.startsWith("@")) return `https://t.me/${cid.slice(1)}`;
-  if (cid.startsWith("-")) return "https://t.me/ipodevta";
-  return `https://t.me/${cid}`;
+function channelUrl(env) {
+  if (env.CHANNEL_URL) return env.CHANNEL_URL.replace(/\/$/, "");
+  const cid = (env.CHANNEL_ID || "@ipodevta").trim();
+  return cid.startsWith("@") ? `https://t.me/${cid.slice(1)}` : "https://t.me/ipodevta";
 }
 
-function boardMode(p) {
-  const raw = String((p && p.board) || "").trim().toLowerCase();
-  if (raw === "main" || raw === "sme" || raw === "both") return raw;
-  if (p && p.include_sme) return "both";
-  return "main";
+function todayIst() {
+  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-function gmpMain(p) {
-  if (p && p.min_gmp_main != null && p.min_gmp_main !== "") return Number(p.min_gmp_main);
-  if (p && p.min_gmp_pct != null && p.min_gmp_pct !== "") return Number(p.min_gmp_pct);
-  return DEFAULTS.min_gmp_main;
+function dateLong(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const wd = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
+  const mo = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()];
+  return `${wd} ${d.getUTCDate()} ${mo}`;
 }
 
-function gmpSme(p) {
-  if (p && p.min_gmp_sme != null && p.min_gmp_sme !== "") return Number(p.min_gmp_sme);
-  const legacy = p && !("min_gmp_sme" in p) && !("board" in p) && p.min_gmp_pct != null;
-  if (legacy) return Number(p.min_gmp_pct);
-  return DEFAULTS.min_gmp_sme;
+function time12h(hhmm) {
+  const [h, m] = String(hhmm || "00:00").split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
-function nearly(a, b) {
-  return Math.abs(Number(a) - Number(b)) < 0.05;
+// ---------------------------------------------------------------- filters
+// Mirrors bot/filters.py; keep both in sync.
+
+function num(v, fallback) {
+  const n = Number(v);
+  return v == null || v === "" || !Number.isFinite(n) ? fallback : n;
 }
 
-function fmtNum(n) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return t("na");
-  return Number.isInteger(v) ? String(v) : String(v);
+function normalizePrefs(p) {
+  p = p || {};
+  let board = String(p.board || "").toLowerCase();
+  if (!["main", "sme", "both"].includes(board)) board = p.include_sme ? "both" : DEFAULTS.board;
+  const legacy = p.min_gmp_pct;
+  const smeLegacy = !("board" in p) && !("min_gmp_sme" in p) ? legacy : undefined;
+  return {
+    board,
+    min_gmp_main: num(p.min_gmp_main ?? legacy, DEFAULTS.min_gmp_main),
+    min_gmp_sme: num(p.min_gmp_sme ?? smeLegacy, DEFAULTS.min_gmp_sme),
+    min_total_sub: num(p.min_total_sub, DEFAULTS.min_total_sub),
+  };
+}
+
+function passesFilter(ipo, prefs) {
+  const p = normalizePrefs(prefs);
+  let bar;
+  if (ipo.board === "SME") {
+    if (p.board === "main") return false;
+    bar = p.min_gmp_sme;
+  } else if (ipo.board === "MAIN") {
+    if (p.board === "sme") return false;
+    bar = p.min_gmp_main;
+  } else {
+    return false;
+  }
+  if (ipo.gmp_pct == null || ipo.sub_total == null) return false;
+  return Number(ipo.gmp_pct) >= bar && Number(ipo.sub_total) >= p.min_total_sub;
 }
 
 function parsePct(raw) {
-  const text = String(raw || "").trim().replace(/%$/, "").trim();
-  const n = Number(text);
-  if (!Number.isFinite(n) || n < 0 || n > 300) return null;
-  return n;
+  const n = Number(String(raw || "").trim().replace(/%$/, "").trim());
+  return Number.isFinite(n) && n >= 0 && n <= 300 ? n : null;
 }
 
-function applyBoard(prefs, mode) {
-  prefs.board = mode;
-  prefs.include_sme = mode !== "main";
-  return prefs;
-}
+const nearly = (a, b) => Math.abs(Number(a) - Number(b)) < 0.05;
+const fmtNum = (n) => String(Number(n));
 
-function applyGmp(prefs, which, val) {
-  if (which === "sme") prefs.min_gmp_sme = val;
-  else {
-    prefs.min_gmp_main = val;
-    prefs.min_gmp_pct = val;
-  }
-  return prefs;
-}
+// ---------------------------------------------------------------- text
 
 function prefsSummary(p) {
-  const mode = boardMode(p);
-  const sub = `${fmtNum(p.min_total_sub)}x`;
-  if (mode === "sme") {
-    return [
-      t("labels.board_sme_line"),
-      t("labels.gmp_line", { value: `${fmtNum(gmpSme(p))}%` }),
-      t("labels.sub_line", { value: sub }),
-    ].join("\n");
+  const sub = t("labels.sub_line", { value: `${fmtNum(p.min_total_sub)}x` });
+  if (p.board === "sme") {
+    return [t("labels.board_sme_line"), t("labels.gmp_line", { value: `${fmtNum(p.min_gmp_sme)}%` }), sub].join("\n");
   }
-  if (mode === "both") {
+  if (p.board === "both") {
     return [
       t("labels.board_both_line"),
-      t("labels.main_gmp_line", { value: `${fmtNum(gmpMain(p))}%` }),
-      t("labels.sme_gmp_line", { value: `${fmtNum(gmpSme(p))}%` }),
-      t("labels.sub_line", { value: sub }),
+      t("labels.main_gmp_line", { value: `${fmtNum(p.min_gmp_main)}%` }),
+      t("labels.sme_gmp_line", { value: `${fmtNum(p.min_gmp_sme)}%` }),
+      sub,
     ].join("\n");
   }
-  return [
-    t("labels.board_main_line"),
-    t("labels.gmp_line", { value: `${fmtNum(gmpMain(p))}%` }),
-    t("labels.sub_line", { value: sub }),
-  ].join("\n");
-}
-
-function esc(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return [t("labels.board_main_line"), t("labels.gmp_line", { value: `${fmtNum(p.min_gmp_main)}%` }), sub].join("\n");
 }
 
 function prefsBlock(p) {
   return `<b>${t("labels.your_filters")}</b>\n<code>${esc(prefsSummary(p))}</code>`;
 }
 
-function welcomeText(p, channelId) {
-  const channel = channelUrl(channelId);
+function welcomeText(p, env) {
   const w = COPY.welcome;
   return [
     w.title,
     w.tagline,
     "",
-    w.lead,
-    w.bullet_verdict,
-    w.bullet_numbers,
-    w.bullet_filters,
+    w.daily,
+    w.none,
+    "",
+    t("welcome.channel", { channel: channelUrl(env) }),
     "",
     prefsBlock(p),
     "",
-    t("rule"),
-    "",
     w.buttons_hint,
-    "",
-    t("welcome.channel_invite", { channel }),
-    "",
-    w.feedback_hint,
-    "",
-    w.closing,
   ].join("\n");
 }
 
-function helpText(channelId) {
-  const channel = channelUrl(channelId);
+function helpText(env) {
   const h = COPY.help;
   return [
     h.title,
-    h.sections,
+    "",
+    h.daily,
+    h.closing,
+    h.none,
     h.check,
-    h.hidden,
-    h.actions,
-    h.feedback,
-    t("help.open_channel", { channel }),
-    `<blockquote expandable>${t("disclaimer.long")}</blockquote>`,
+    h.settings,
+    t("help.channel", { channel: channelUrl(env) }),
+    "",
+    `<blockquote expandable>${esc(t("disclaimer"))}</blockquote>`,
   ].join("\n");
 }
 
 function settingsText(p) {
-  const mode = boardMode(p);
   const s = COPY.settings;
-  const hint =
-    mode === "sme" ? s.hint_sme : mode === "both" ? s.hint_both : s.hint_main;
-  return [
-    s.title,
-    "",
-    prefsBlock(p),
-    "",
-    hint,
-    s.tap_hint,
-    s.filters_use,
-    s.channel_note,
-  ].join("\n");
+  const hint = p.board === "sme" ? s.hint_sme : p.board === "both" ? s.hint_both : s.hint_main;
+  return [s.title, "", prefsBlock(p), "", hint, s.tap_hint, s.filters_use].join("\n");
 }
 
 function gmpPrompt(which) {
-  const sme = which === "sme";
   return [
-    sme ? t("gmp_prompt.title_sme") : t("gmp_prompt.title_main"),
+    which === "sme" ? t("gmp_prompt.title_sme") : t("gmp_prompt.title_main"),
     "",
-    t("gmp_prompt.body", { example: sme ? "48" : "34" }),
+    t("gmp_prompt.body", { example: which === "sme" ? "48" : "34" }),
     t("gmp_prompt.cancel"),
   ].join("\n");
 }
 
-function channelText(channelId) {
-  const url = channelUrl(channelId);
-  const handle = url.replace("https://t.me/", "@");
-  const c = COPY.channel_invite;
-  return [
-    c.title,
-    "",
-    c.no_filters,
-    "",
-    c.body,
-    "",
-    t("rule"),
-    "",
-    t("channel_invite.join", { channel: url, handle }),
-    "",
-    c.closing,
-  ].join("\n");
-}
-
-function feedbackPrompt() {
-  const f = COPY.feedback;
-  return [f.title, "", f.body, f.forward, "", f.cancel].join("\n");
-}
+// ---------------------------------------------------------------- keyboards
 
 function mainKeyboard() {
   return {
     keyboard: [
-      [{ text: BTN.PREVIEW }, { text: BTN.SETTINGS }],
-      [{ text: BTN.HELP }, { text: BTN.CHANNEL }],
-      [{ text: BTN.FEEDBACK }],
+      [{ text: btn("check") }, { text: btn("settings") }],
+      [{ text: btn("channel") }, { text: btn("help") }],
+      [{ text: btn("feedback") }],
     ],
     resize_keyboard: true,
     is_persistent: true,
   };
 }
 
-function homeInline(channelId) {
+function cardKeyboard(todayUrl) {
   return {
     inline_keyboard: [
       [
-        { text: BTN.PREVIEW, callback_data: "preview" },
-        { text: BTN.SETTINGS, callback_data: "settings" },
+        { text: btn("today_ipos"), url: todayUrl },
+        { text: btn("filters"), callback_data: "settings" },
       ],
-      [
-        { text: BTN.HELP, callback_data: "help" },
-        { text: btn("join_channel"), url: channelUrl(channelId) },
-      ],
-      [{ text: BTN.FEEDBACK, callback_data: "feedback" }],
     ],
   };
 }
 
 function settingsInline(p) {
-  const mode = boardMode(p);
-  const sub = Number(p.min_total_sub);
   const mark = (on, label) => (on ? `✓ ${label}` : label);
   const pctRows = (current, presets, which, prefix) => {
-    const buttons = presets.map((value) => ({
-      text: mark(nearly(current, value), `${prefix}${value}%`),
-      callback_data: `gmp:${which}:${value}`,
+    const custom = !presets.some((v) => nearly(current, v));
+    const buttons = presets.map((v) => ({
+      text: mark(nearly(current, v), `${prefix}${v}%`),
+      callback_data: `gmp:${which}:${v}`,
     }));
-    const custom = !presets.some((value) => nearly(current, value));
-    const typeLabel = prefix
-      ? t("buttons.type_pct_prefixed", { prefix: prefix.trim() })
-      : btn("type_pct");
+    const typeLabel = prefix ? t("buttons.type_pct_prefixed", { prefix: prefix.trim() }) : btn("type_pct");
     buttons.push({
       text: mark(custom, custom ? `${prefix}${fmtNum(current)}%` : typeLabel),
       callback_data: `gmp:ask:${which}`,
@@ -295,36 +222,30 @@ function settingsInline(p) {
     for (let i = 0; i < buttons.length; i += 3) rows.push(buttons.slice(i, i + 3));
     return rows;
   };
+
+  const both = p.board === "both";
   const rows = [];
-  const prefixMain = mode === "both" ? "M " : "";
-  const prefixSme = mode === "both" ? "S " : "";
-  if (mode === "main" || mode === "both") {
-    rows.push(...pctRows(gmpMain(p), MAIN_PRESETS, "main", prefixMain));
-  }
-  if (mode === "sme" || mode === "both") {
-    rows.push(...pctRows(gmpSme(p), SME_PRESETS, "sme", prefixSme));
-  }
+  if (p.board !== "sme") rows.push(...pctRows(p.min_gmp_main, MAIN_PRESETS, "main", both ? "M " : ""));
+  if (p.board !== "main") rows.push(...pctRows(p.min_gmp_sme, SME_PRESETS, "sme", both ? "S " : ""));
   rows.push(
-    SUB_PRESETS.map((value) => ({
-      text: mark(nearly(sub, value), t("buttons.sub_preset", { value: String(value) })),
-      callback_data: `sub:${value}`,
+    SUB_PRESETS.map((v) => ({
+      text: mark(nearly(p.min_total_sub, v), t("buttons.sub_preset", { value: String(v) })),
+      callback_data: `sub:${v}`,
     }))
   );
   rows.push([
-    { text: mark(mode === "main", btn("board_main")), callback_data: "board:main" },
-    { text: mark(mode === "sme", btn("board_sme")), callback_data: "board:sme" },
-    { text: mark(mode === "both", btn("board_both")), callback_data: "board:both" },
+    { text: mark(p.board === "main", btn("board_main")), callback_data: "board:main" },
+    { text: mark(p.board === "sme", btn("board_sme")), callback_data: "board:sme" },
+    { text: mark(both, btn("board_both")), callback_data: "board:both" },
   ]);
-  rows.push([
-    { text: BTN.PREVIEW, callback_data: "preview" },
-    { text: btn("home"), callback_data: "home" },
-  ]);
+  rows.push([{ text: btn("check"), callback_data: "check" }]);
   return { inline_keyboard: rows };
 }
 
+// ---------------------------------------------------------------- telegram + KV
+
 async function tg(env, method, body) {
-  const url = `https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/${method}`;
-  const resp = await fetch(url, {
+  const resp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -332,339 +253,139 @@ async function tg(env, method, body) {
   return resp.json();
 }
 
-let profileSynced = false;
-
-async function ensureBotProfile(env) {
-  if (profileSynced) return;
-  const c = COPY.commands;
-  const commands = [
-    { command: "start", description: c.start },
-    { command: "preview", description: c.preview },
-    { command: "settings", description: c.settings },
-    { command: "help", description: c.help },
-    { command: "feedback", description: c.feedback },
-  ];
-  await tg(env, "setMyCommands", { commands });
-  await tg(env, "setMyShortDescription", {
-    short_description: t("bot.short_description").slice(0, 120),
-  });
-  await tg(env, "setMyDescription", {
-    description: t("bot.description").slice(0, 512),
-  });
-  try {
-    await tg(env, "setMyName", { name: t("bot.name") });
-  } catch (_) {
-    // older bots may not support rename via API
-  }
-  profileSynced = true;
-}
-
-async function beginFeedback(env, chatId) {
-  await env.PREFS.put(`feedback:await:${chatId}`, "1", { expirationTtl: 600 });
-  await tg(env, "sendMessage", {
+function send(env, chatId, text, extra) {
+  return tg(env, "sendMessage", {
     chat_id: chatId,
-    text: feedbackPrompt(),
+    text,
     parse_mode: "HTML",
-    reply_markup: mainKeyboard(),
+    link_preview_options: { is_disabled: true },
+    ...extra,
   });
 }
 
-async function handleFeedbackMessage(env, chatId, text) {
-  const awaiting = await env.PREFS.get(`feedback:await:${chatId}`);
-  if (!awaiting) return false;
-
-  const raw = (text || "").trim();
-  if (!raw) return true;
-
-  if (raw.toLowerCase() === "cancel") {
-    await env.PREFS.delete(`feedback:await:${chatId}`);
-    await tg(env, "sendMessage", {
-      chat_id: chatId,
-      text: t("feedback.cancelled"),
-      reply_markup: mainKeyboard(),
-    });
-    return true;
-  }
-
-  await env.PREFS.delete(`feedback:await:${chatId}`);
-  const admin = (env.ADMIN_CHAT_ID || "").trim();
-  if (admin) {
-    await tg(env, "sendMessage", {
-      chat_id: admin,
-      text:
-        t("labels.feedback_admin", { chat_id: esc(String(chatId)) }) +
-        `\n${t("rule")}\n` +
-        esc(raw),
-      parse_mode: "HTML",
-    });
-  }
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: t("feedback.thanks"),
-    reply_markup: homeInline(env.CHANNEL_ID),
-    parse_mode: "HTML",
-  });
-  return true;
-}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function getPrefs(env, chatId) {
-  const key = `prefs:${chatId}`;
-  const raw = await env.PREFS.get(key);
-  if (!raw) {
-    const prefs = { ...DEFAULTS, updated: new Date().toISOString() };
-    await savePrefs(env, chatId, prefs);
-    return prefs;
-  }
-  return JSON.parse(raw);
+  const raw = await env.PREFS.get(`prefs:${chatId}`);
+  if (raw) return normalizePrefs(JSON.parse(raw));
+  const prefs = { ...DEFAULTS };
+  await savePrefs(env, chatId, prefs);
+  return prefs;
 }
 
 async function savePrefs(env, chatId, prefs) {
-  prefs.updated = new Date().toISOString();
-  await env.PREFS.put(`prefs:${chatId}`, JSON.stringify(prefs));
-  const idxRaw = await env.PREFS.get("users:index");
-  const idx = idxRaw ? JSON.parse(idxRaw) : [];
-  const id = String(chatId);
-  if (!idx.includes(id)) {
-    idx.push(id);
+  const clean = { ...normalizePrefs(prefs), updated: new Date().toISOString() };
+  await env.PREFS.put(`prefs:${chatId}`, JSON.stringify(clean));
+  const idx = JSON.parse((await env.PREFS.get("users:index")) || "[]");
+  if (!idx.includes(String(chatId))) {
+    idx.push(String(chatId));
     await env.PREFS.put("users:index", JSON.stringify(idx));
   }
 }
 
-async function githubDispatch(env, eventType, payload) {
-  const repo = env.GITHUB_REPO;
-  const token = env.GITHUB_TOKEN;
-  if (!repo || !token) return false;
-  const resp = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      accept: "application/vnd.github+json",
-      "content-type": "application/json",
-      "user-agent": "ipo-devta-worker",
-    },
-    body: JSON.stringify({
-      event_type: eventType,
-      client_payload: payload || {},
-    }),
-  });
-  return resp.status === 204;
+async function exportUsers(env) {
+  const idx = JSON.parse((await env.PREFS.get("users:index")) || "[]");
+  const users = {};
+  for (const id of idx) {
+    const raw = await env.PREFS.get(`prefs:${id}`);
+    if (raw) users[id] = normalizePrefs(JSON.parse(raw));
+  }
+  return users;
 }
 
-async function triggerPreview(env, chatId) {
-  return githubDispatch(env, "preview", { chat_id: String(chatId) });
-}
-
-async function triggerAlert(env) {
-  return githubDispatch(env, "alert", { source: "worker-cron" });
-}
+// ---------------------------------------------------------------- screens
 
 async function sendHome(env, chatId) {
   const prefs = await getPrefs(env, chatId);
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: welcomeText(prefs, env.CHANNEL_ID),
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-    reply_markup: mainKeyboard(),
-  });
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: t("labels.quick_actions_html"),
-    parse_mode: "HTML",
-    reply_markup: homeInline(env.CHANNEL_ID),
-  });
+  await send(env, chatId, welcomeText(prefs, env), { reply_markup: mainKeyboard() });
 }
 
 async function sendHelp(env, chatId) {
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: helpText(env.CHANNEL_ID),
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-    reply_markup: homeInline(env.CHANNEL_ID),
-  });
-}
-
-async function sendSettings(env, chatId, messageId) {
-  const prefs = await getPrefs(env, chatId);
-  const body = {
-    chat_id: chatId,
-    text: settingsText(prefs),
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-    reply_markup: settingsInline(prefs),
-  };
-  if (messageId) {
-    body.message_id = messageId;
-    const edited = await tg(env, "editMessageText", body);
-    if (edited && edited.ok) return;
-  }
-  await tg(env, "sendMessage", body);
+  await send(env, chatId, helpText(env), { reply_markup: mainKeyboard() });
 }
 
 async function sendChannel(env, chatId) {
-  const url = channelUrl(env.CHANNEL_ID);
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: channelText(env.CHANNEL_ID),
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-    reply_markup: {
-      inline_keyboard: [[{ text: btn("join_channel"), url }]],
-    },
+  await send(env, chatId, t("welcome.channel", { channel: channelUrl(env) }), {
+    reply_markup: { inline_keyboard: [[{ text: btn("join_channel"), url: channelUrl(env) }]] },
   });
 }
 
-function prefsFingerprint(p) {
-  return {
-    board: boardMode(p),
-    min_gmp_main: gmpMain(p),
-    min_gmp_sme: gmpSme(p),
-    min_total_sub: Number(p.min_total_sub),
-  };
-}
-
-function prefsEqual(a, b) {
-  if (!a || !b) return false;
-  return (
-    a.board === b.board &&
-    Number(a.min_gmp_main) === Number(b.min_gmp_main) &&
-    Number(a.min_gmp_sme) === Number(b.min_gmp_sme) &&
-    Number(a.min_total_sub) === Number(b.min_total_sub)
-  );
-}
-
-async function getPreviewCache(env, chatId) {
-  const raw = await env.PREFS.get(`preview:msg:${chatId}`);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-async function savePreviewCache(env, chatId, payload) {
-  await env.PREFS.put(`preview:msg:${chatId}`, JSON.stringify(payload), {
-    expirationTtl: PREVIEW_CACHE_TTL_SEC,
-  });
-}
-
-async function clearPreviewCache(env, chatId) {
-  await env.PREFS.delete(`preview:msg:${chatId}`);
-}
-
-async function previewLocked(env, chatId) {
-  const key = `cooldown:preview:${chatId}`;
-  return Boolean(await env.PREFS.get(key));
-}
-
-async function lockPreview(env, chatId) {
-  const key = `cooldown:preview:${chatId}`;
-  await env.PREFS.put(key, String(Date.now()), {
-    expirationTtl: PREVIEW_COOLDOWN_SEC,
-  });
-}
-
-async function sendCachedPreview(env, chatId, cached) {
-  const ageMin = Math.max(
-    1,
-    Math.round((Date.now() - Number(cached.ts || Date.now())) / 60000)
-  );
-  const header =
-    `${t("preview.saved_title")}\n` +
-    `${t("preview.saved_age", { age: String(ageMin) })}\n` +
-    `${t("rule")}\n\n`;
-  let body = cached.text || "";
-  const text = header + body;
-  const finalText =
-    text.length > 4000
-      ? text.slice(0, 3900) + "\n\n" + t("messages.truncated")
-      : text;
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: finalText,
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-    reply_markup: homeInline(env.CHANNEL_ID),
-  });
-}
-
-async function sendPreviewAck(env, chatId, callbackQueryId) {
+async function sendSettings(env, chatId, editMessageId) {
   const prefs = await getPrefs(env, chatId);
-  const fp = prefsFingerprint(prefs);
-  const cached = await getPreviewCache(env, chatId);
-
-  if (cached && prefsEqual(cached.prefs, fp) && cached.text) {
-    if (callbackQueryId) {
-      await tg(env, "answerCallbackQuery", {
-        callback_query_id: callbackQueryId,
-        text: t("preview.toast_saved"),
-      });
-    }
-    await sendCachedPreview(env, chatId, cached);
-    return;
-  }
-
-  if (await previewLocked(env, chatId)) {
-    const waitMsg =
-      t("preview.in_progress_title") + "\n\n" + t("preview.in_progress_body");
-    if (callbackQueryId) {
-      await tg(env, "answerCallbackQuery", {
-        callback_query_id: callbackQueryId,
-        text: t("preview.toast_wait"),
-        show_alert: true,
-      });
-    }
-    await tg(env, "sendMessage", {
+  const body = { text: settingsText(prefs), reply_markup: settingsInline(prefs) };
+  if (editMessageId) {
+    const edited = await tg(env, "editMessageText", {
       chat_id: chatId,
-      text: waitMsg,
+      message_id: editMessageId,
       parse_mode: "HTML",
-      reply_markup: homeInline(env.CHANNEL_ID),
+      ...body,
     });
+    if (edited && edited.ok) return;
+  }
+  await send(env, chatId, body.text, { reply_markup: body.reply_markup });
+}
+
+async function sendCheck(env, chatId) {
+  const raw = await env.PREFS.get("market:latest");
+  if (!raw) {
+    await send(env, chatId, t("check.no_data"), { reply_markup: mainKeyboard() });
     return;
   }
-
-  await lockPreview(env, chatId);
-  const ok = await triggerPreview(env, chatId);
-  if (callbackQueryId) {
-    await tg(env, "answerCallbackQuery", {
-      callback_query_id: callbackQueryId,
-      text: ok ? t("preview.toast_fetching") : t("preview.toast_unavailable"),
+  const market = JSON.parse(raw);
+  const prefs = await getPrefs(env, chatId);
+  const keyboard = cardKeyboard(market.today_url || channelUrl(env));
+  if (market.date !== todayIst()) {
+    await send(env, chatId, t("check.stale", { date: dateLong(market.date), time: time12h(market.as_of) }), {
+      disable_notification: true,
     });
   }
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: ok
-      ? [
-          t("preview.fetching_title"),
-          "",
-          t("preview.fetching_body"),
-          "",
-          t("rule"),
-          "",
-          t("preview.fetching_eta"),
-          t("preview.fetching_hint"),
-        ].join("\n")
-      : [
-          t("preview.fetching_title"),
-          "",
-          t("preview.unavailable_body"),
-        ].join("\n"),
-    parse_mode: "HTML",
-    reply_markup: homeInline(env.CHANNEL_ID),
-  });
+  const passing = (market.ipos || []).filter((ipo) => passesFilter(ipo, prefs)).slice(0, MAX_CHECK_CARDS);
+  if (!passing.length) {
+    await send(env, chatId, t("no_match"), { reply_markup: keyboard });
+    return;
+  }
+  for (let i = 0; i < passing.length; i++) {
+    if (i) await sleep(350);
+    await send(env, chatId, passing[i].card, { reply_markup: keyboard, disable_notification: i > 0 });
+  }
+}
+
+async function beginFeedback(env, chatId) {
+  await env.PREFS.put(`feedback:await:${chatId}`, "1", { expirationTtl: 600 });
+  const f = COPY.feedback;
+  await send(env, chatId, [f.title, "", f.body, f.cancel].join("\n"), { reply_markup: mainKeyboard() });
+}
+
+// ---------------------------------------------------------------- inputs
+
+function isMenuInput(raw) {
+  const first = raw.split(/\s+/)[0].toLowerCase().split("@")[0].replace(/^\//, "");
+  const labels = ["check", "settings", "help", "channel", "feedback"].map(btn);
+  return labels.includes(raw) || raw.startsWith("/") || ["start", "menu", "help", "check", "settings", "channel", "feedback"].includes(first);
+}
+
+async function handleFeedbackMessage(env, chatId, raw) {
+  if (!(await env.PREFS.get(`feedback:await:${chatId}`))) return false;
+  if (isMenuInput(raw)) {
+    await env.PREFS.delete(`feedback:await:${chatId}`);
+    return false;
+  }
+  await env.PREFS.delete(`feedback:await:${chatId}`);
+  if (raw.toLowerCase() === "cancel") {
+    await send(env, chatId, t("feedback.cancelled"), { reply_markup: mainKeyboard() });
+    return true;
+  }
+  if (env.ADMIN_CHAT_ID) {
+    await send(env, env.ADMIN_CHAT_ID, `${t("labels.feedback_admin", { chat_id: esc(String(chatId)) })}\n\n${esc(raw)}`);
+  }
+  await send(env, chatId, t("feedback.thanks"), { reply_markup: mainKeyboard() });
+  return true;
 }
 
 async function handleCustomGmp(env, chatId, raw) {
   const waiting = await env.PREFS.get(`gmp:await:${chatId}`);
   if (!waiting) return false;
-  const first = raw.split(/\s+/)[0].toLowerCase().split("@")[0];
-  const menu =
-    Object.values(BTN).includes(raw) ||
-    raw.startsWith("/") ||
-    ["start", "menu", "help", "preview", "settings", "status", "channel", "feedback"].includes(first);
-  if (menu) {
+  if (isMenuInput(raw)) {
     await env.PREFS.delete(`gmp:await:${chatId}`);
     return false;
   }
@@ -676,234 +397,176 @@ async function handleCustomGmp(env, chatId, raw) {
   }
   const val = parsePct(raw);
   if (val == null) {
-    await tg(env, "sendMessage", {
-      chat_id: chatId,
-      text: `${gmpPrompt(which)}\n\n${t("gmp_prompt.retry")}`,
-      parse_mode: "HTML",
-      reply_markup: mainKeyboard(),
-    });
+    await send(env, chatId, `${gmpPrompt(which)}\n\n${t("gmp_prompt.retry")}`, { reply_markup: mainKeyboard() });
     return true;
   }
   const prefs = await getPrefs(env, chatId);
-  applyGmp(prefs, which, val);
+  prefs[which === "sme" ? "min_gmp_sme" : "min_gmp_main"] = val;
   await savePrefs(env, chatId, prefs);
   await env.PREFS.delete(`gmp:await:${chatId}`);
-  await clearPreviewCache(env, chatId);
-  const label = which === "sme" ? t("labels.sme") : t("labels.mainboard");
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: t("messages.saved_gmp", {
-      label,
+  await send(
+    env,
+    chatId,
+    t("messages.saved_gmp", {
+      label: which === "sme" ? t("labels.sme") : t("labels.mainboard"),
       value: String(val),
-      prefs: prefsBlock(prefs),
+      prefs: prefsBlock(normalizePrefs(prefs)),
     }),
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-    reply_markup: settingsInline(prefs),
-  });
+    { reply_markup: settingsInline(normalizePrefs(prefs)) }
+  );
   return true;
 }
 
 async function handleText(env, chatId, text) {
   const raw = (text || "").trim();
   if (!raw) return;
-
   if (await handleCustomGmp(env, chatId, raw)) return;
   if (await handleFeedbackMessage(env, chatId, raw)) return;
 
-  if (raw === BTN.PREVIEW) return sendPreviewAck(env, chatId);
-  if (raw === BTN.SETTINGS) return sendSettings(env, chatId);
-  if (raw === BTN.HELP) return sendHelp(env, chatId);
-  if (raw === BTN.CHANNEL) return sendChannel(env, chatId);
-  if (raw === BTN.FEEDBACK) return beginFeedback(env, chatId);
+  if (raw === btn("check")) return sendCheck(env, chatId);
+  if (raw === btn("settings")) return sendSettings(env, chatId);
+  if (raw === btn("channel")) return sendChannel(env, chatId);
+  if (raw === btn("help")) return sendHelp(env, chatId);
+  if (raw === btn("feedback")) return beginFeedback(env, chatId);
 
-  const cmd = raw.split(/\s+/)[0].toLowerCase().split("@")[0];
-  if (["/start", "/menu", "start", "menu"].includes(cmd)) return sendHome(env, chatId);
-  if (["/help", "help"].includes(cmd)) return sendHelp(env, chatId);
-  if (["/settings", "/status", "settings", "status"].includes(cmd))
-    return sendSettings(env, chatId);
-  if (["/preview", "preview"].includes(cmd)) return sendPreviewAck(env, chatId);
-  if (["/channel", "channel"].includes(cmd)) return sendChannel(env, chatId);
-  if (["/feedback", "feedback"].includes(cmd)) return beginFeedback(env, chatId);
+  const cmd = raw.split(/\s+/)[0].toLowerCase().split("@")[0].replace(/^\//, "");
+  if (["start", "menu"].includes(cmd)) return sendHome(env, chatId);
+  if (["check", "preview"].includes(cmd)) return sendCheck(env, chatId);
+  if (["settings", "filters", "status"].includes(cmd)) return sendSettings(env, chatId);
+  if (cmd === "channel") return sendChannel(env, chatId);
+  if (cmd === "help") return sendHelp(env, chatId);
+  if (cmd === "feedback") return beginFeedback(env, chatId);
 
-  await tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: t("messages.use_buttons_worker"),
-    reply_markup: mainKeyboard(),
-  });
+  await send(env, chatId, t("messages.use_buttons"), { reply_markup: mainKeyboard() });
 }
 
 async function handleCallback(env, cb) {
-  const chatId = cb.message?.chat?.id || cb.from?.id;
+  const chatId = cb.message?.chat?.id ?? cb.from?.id;
   const messageId = cb.message?.message_id;
-  const data = (cb.data || "").trim();
-  if (!chatId) return;
+  const data = String(cb.data || "").trim();
+  if (chatId == null) return;
+  const answer = (text) =>
+    tg(env, "answerCallbackQuery", { callback_query_id: cb.id, ...(text ? { text } : {}) });
 
-  const answer = async (text, showAlert = false) =>
-    tg(env, "answerCallbackQuery", {
-      callback_query_id: cb.id,
-      text: text || undefined,
-      show_alert: showAlert,
-    });
-
-  if (["home", "menu", "start"].includes(data)) {
-    await answer(t("toasts.home"));
-    return sendHome(env, chatId);
+  if (data === "settings") {
+    // Opened from an IPO card: send a new message so the card stays intact.
+    await answer(t("toasts.settings"));
+    return sendSettings(env, chatId);
+  }
+  if (data === "check") {
+    await answer(t("toasts.check"));
+    return sendCheck(env, chatId);
   }
   if (data === "help") {
     await answer(t("toasts.help"));
     return sendHelp(env, chatId);
   }
-  if (data === "settings") {
-    await answer(t("toasts.settings"));
-    return sendSettings(env, chatId, messageId);
-  }
-  if (data === "channel") {
-    await answer();
-    return sendChannel(env, chatId);
-  }
-  if (data === "preview") {
-    return sendPreviewAck(env, chatId, cb.id);
+  if (["home", "menu", "start"].includes(data)) {
+    await answer(t("toasts.home"));
+    return sendHome(env, chatId);
   }
   if (data === "feedback") {
     await answer(t("toasts.feedback"));
     return beginFeedback(env, chatId);
   }
 
-  if (data.startsWith("gmp:")) {
-    const parts = data.split(":");
-    if (parts.length === 3 && parts[1] === "ask" && (parts[2] === "main" || parts[2] === "sme")) {
-      const which = parts[2];
-      await env.PREFS.put(`gmp:await:${chatId}`, which, { expirationTtl: 600 });
-      await answer(which === "sme" ? t("toasts.send_sme_pct") : t("toasts.send_main_pct"));
-      await tg(env, "sendMessage", {
-        chat_id: chatId,
-        text: gmpPrompt(which),
-        parse_mode: "HTML",
-        reply_markup: mainKeyboard(),
-      });
-      return;
-    }
-    let which = "main";
-    if (parts.length === 3 && (parts[1] === "main" || parts[1] === "sme")) which = parts[1];
-    const val = parsePct(parts[parts.length - 1]);
-    if (val == null) {
-      await answer(t("toasts.invalid_gmp"));
-      return;
-    }
+  const [kind, a, b] = data.split(":");
+  if (kind === "gmp" && a === "ask" && (b === "main" || b === "sme")) {
+    await env.PREFS.put(`gmp:await:${chatId}`, b, { expirationTtl: 600 });
+    await answer(b === "sme" ? t("toasts.send_sme_pct") : t("toasts.send_main_pct"));
+    return send(env, chatId, gmpPrompt(b), { reply_markup: mainKeyboard() });
+  }
+  if (kind === "gmp" && (a === "main" || a === "sme")) {
+    const val = parsePct(b);
+    if (val == null) return answer(t("toasts.invalid_gmp"));
     const prefs = await getPrefs(env, chatId);
-    applyGmp(prefs, which, val);
+    prefs[a === "sme" ? "min_gmp_sme" : "min_gmp_main"] = val;
     await savePrefs(env, chatId, prefs);
     await env.PREFS.delete(`gmp:await:${chatId}`);
-    await clearPreviewCache(env, chatId);
-    const label = which === "sme" ? t("labels.sme") : t("labels.mainboard");
-    await answer(t("toasts.gmp_saved", { label, value: String(val) }));
+    await answer(t("toasts.gmp_saved", { label: a === "sme" ? t("labels.sme") : t("labels.mainboard"), value: String(val) }));
     return sendSettings(env, chatId, messageId);
   }
-  if (data.startsWith("sub:")) {
-    const val = Number(data.split(":")[1]);
+  if (kind === "sub") {
+    const val = Number(a);
+    if (!SUB_PRESETS.includes(val)) return answer(t("toasts.unknown"));
     const prefs = await getPrefs(env, chatId);
     prefs.min_total_sub = val;
     await savePrefs(env, chatId, prefs);
-    await clearPreviewCache(env, chatId);
     await answer(t("toasts.sub_saved", { value: String(val) }));
     return sendSettings(env, chatId, messageId);
   }
-  if (data.startsWith("board:")) {
-    const token = data.split(":")[1];
-    const mode = { all: "both", both: "both", sme: "sme", main: "main" }[token] || "main";
+  if (kind === "board" && ["main", "sme", "both"].includes(a)) {
     const prefs = await getPrefs(env, chatId);
-    applyBoard(prefs, mode);
+    prefs.board = a;
     await savePrefs(env, chatId, prefs);
     await env.PREFS.delete(`gmp:await:${chatId}`);
-    await clearPreviewCache(env, chatId);
-    const toast = {
-      main: t("toasts.board_main"),
-      sme: t("toasts.board_sme"),
-      both: t("toasts.board_both"),
-    }[mode];
-    await answer(toast);
+    await answer(t(`toasts.board_${a}`));
     return sendSettings(env, chatId, messageId);
   }
-
-  await answer(t("toasts.unknown"));
+  return answer(t("toasts.unknown"));
 }
 
-/** Export all prefs for Actions (Authorization: Bearer EXPORT_SECRET). */
-async function exportUsers(env) {
-  const idxRaw = await env.PREFS.get("users:index");
-  const idx = idxRaw ? JSON.parse(idxRaw) : [];
-  const users = {};
-  for (const id of idx) {
-    const raw = await env.PREFS.get(`prefs:${id}`);
-    if (raw) users[id] = JSON.parse(raw);
+// ---------------------------------------------------------------- schedule
+
+async function dispatch(env, eventType) {
+  if (!env.GITHUB_REPO || !env.GITHUB_TOKEN) return 0;
+  const resp = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      accept: "application/vnd.github+json",
+      "content-type": "application/json",
+      "user-agent": "ipodevta-worker",
+    },
+    body: JSON.stringify({ event_type: eventType, client_payload: { source: "worker-cron" } }),
+  });
+  return resp.status;
+}
+
+async function runCron(env, cron) {
+  const event = CRON_EVENTS[cron];
+  if (!event) return;
+  const status = await dispatch(env, event);
+  console.log("dispatch", event, status);
+  if (status !== 204 && env.ADMIN_CHAT_ID) {
+    await tg(env, "sendMessage", {
+      chat_id: env.ADMIN_CHAT_ID,
+      text: t("admin.dispatch_failed", { event, status: String(status) }),
+    });
   }
-  return users;
+}
+
+// ---------------------------------------------------------------- entry
+
+function authorized(request, env) {
+  return Boolean(env.EXPORT_SECRET) && request.headers.get("authorization") === `Bearer ${env.EXPORT_SECRET}`;
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    if (request.method === "GET" && url.pathname === "/health") {
-      return new Response("ok");
+    if (request.method === "GET" && url.pathname === "/health") return new Response("ok");
+
+    if (url.pathname === "/export/users" && request.method === "GET") {
+      if (!authorized(request, env)) return new Response("unauthorized", { status: 401 });
+      return Response.json(await exportUsers(env));
     }
 
-    if (request.method === "GET" && url.pathname === "/export/users") {
-      const auth = request.headers.get("authorization") || "";
-      const expected = `Bearer ${env.EXPORT_SECRET || ""}`;
-      if (!env.EXPORT_SECRET || auth !== expected) {
-        return new Response("unauthorized", { status: 401 });
-      }
-      const users = await exportUsers(env);
-      return Response.json(users);
-    }
-
-    if (request.method === "POST" && url.pathname === "/seed") {
-      const auth = request.headers.get("authorization") || "";
-      const expected = `Bearer ${env.EXPORT_SECRET || ""}`;
-      if (!env.EXPORT_SECRET || auth !== expected) {
-        return new Response("unauthorized", { status: 401 });
-      }
+    if (url.pathname === "/market" && request.method === "POST") {
+      if (!authorized(request, env)) return new Response("unauthorized", { status: 401 });
       const body = await request.json();
-      const idx = [];
-      for (const [id, prefs] of Object.entries(body || {})) {
-        await env.PREFS.put(`prefs:${id}`, JSON.stringify({ ...DEFAULTS, ...prefs }));
-        idx.push(String(id));
+      if (!body || !body.date || !Array.isArray(body.ipos)) {
+        return new Response("date and ipos required", { status: 400 });
       }
-      await env.PREFS.put("users:index", JSON.stringify(idx));
-      return Response.json({ ok: true, users: idx.length });
-    }
-
-    if (request.method === "POST" && url.pathname === "/cache/preview") {
-      const auth = request.headers.get("authorization") || "";
-      const expected = `Bearer ${env.EXPORT_SECRET || ""}`;
-      if (!env.EXPORT_SECRET || auth !== expected) {
-        return new Response("unauthorized", { status: 401 });
-      }
-      const body = await request.json();
-      const chatId = String(body.chat_id || "");
-      const text = body.text || "";
-      if (!chatId || !text) {
-        return new Response("chat_id and text required", { status: 400 });
-      }
-      await savePreviewCache(env, chatId, {
-        text,
-        prefs: body.prefs || {},
-        source: body.source || "",
-        saved_at: body.saved_at || new Date().toISOString(),
-        ts: Date.now(),
-      });
-      return Response.json({ ok: true });
+      await env.PREFS.put("market:latest", JSON.stringify(body));
+      return Response.json({ ok: true, ipos: body.ipos.length });
     }
 
     if (request.method !== "POST" || url.pathname !== "/telegram") {
       return new Response("not found", { status: 404 });
     }
-
-    // Optional shared secret from Telegram secret_token
-    const secret = request.headers.get("x-telegram-bot-api-secret-token");
-    if (env.WEBHOOK_SECRET && secret !== env.WEBHOOK_SECRET) {
+    if (env.WEBHOOK_SECRET && request.headers.get("x-telegram-bot-api-secret-token") !== env.WEBHOOK_SECRET) {
       return new Response("forbidden", { status: 403 });
     }
 
@@ -914,28 +577,22 @@ export default {
       return new Response("bad json", { status: 400 });
     }
 
-    try {
-      await ensureBotProfile(env);
-      if (update.callback_query) {
-        await handleCallback(env, update.callback_query);
-      } else {
-        const msg = update.message || update.edited_message;
-        if (msg?.chat?.id != null) {
-          await handleText(env, msg.chat.id, msg.text || "");
+    const work = (async () => {
+      try {
+        if (update.callback_query) {
+          await handleCallback(env, update.callback_query);
+        } else if (update.message?.chat?.id != null) {
+          await handleText(env, update.message.chat.id, update.message.text || "");
         }
+      } catch (err) {
+        console.error("handler error", err);
       }
-    } catch (err) {
-      console.error("handler error", err);
-    }
-
+    })();
+    ctx.waitUntil(work);
     return new Response("ok");
   },
 
-  async scheduled(_event, env, ctx) {
-    ctx.waitUntil(
-      triggerAlert(env).then((ok) => {
-        console.log("alert dispatch", ok ? "ok" : "failed");
-      })
-    );
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runCron(env, event.cron));
   },
 };

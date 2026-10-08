@@ -1,467 +1,306 @@
-"""Entrypoint: python -m bot.run --mode snapshot|alert|dry-run"""
+"""Entrypoint.
+
+    python -m bot.run channel            # 9:30 IST: header + one card per open IPO
+    python -m bot.run bot                # 14:30 IST: one card per passing IPO to each user
+    python -m bot.run bot --dry-run      # print instead of sending, no state writes
+    python -m bot.run channel --dry-run --fixture tests/fixtures/market.json
+"""
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
-import re
 import sys
 import traceback
-from typing import Any
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Protocol
 
-from bot import brief as brief_mod
-from bot import config, keyboards, match, notify, render, state, users
-from bot.sources import bse, gmp, ipoguru
+from bot import cards, config, filters, state, telegram, worker_api
+from bot.collect import CollectError, Collected, collect, is_open_on, order, snapshot_rows
+from bot.sources import ipoguru
 
 log = logging.getLogger(__name__)
 
-
-class AbortBroadcast(Exception):
-    """Fatal data problem - alert admin, send nothing to channel/users."""
+MODES = (cards.PHASE_CHANNEL, cards.PHASE_BOT)
 
 
-def _hhmm_from_ts(ts: str) -> str:
-    m = re.search(r"T(\d{2}):(\d{2})", ts)
-    if m:
-        return f"{m.group(1)}:{m.group(2)}"
-    return "10:55"
+class Sender(Protocol):
+    def send(
+        self,
+        chat_id: str | int,
+        html: str,
+        *,
+        reply_markup: dict[str, Any] | None = None,
+        silent: bool = False,
+    ) -> dict[str, Any]: ...
 
 
-def build_snapshot_rows(
-    enriched: list[dict[str, Any]],
+class LiveSender:
+    def send(self, chat_id, html, *, reply_markup=None, silent=False):  # noqa: ANN001
+        return telegram.send(chat_id, html, reply_markup=reply_markup, silent=silent)
+
+
+class DryRunSender:
+    def __init__(self) -> None:
+        self.sent: list[dict[str, Any]] = []
+
+    def send(self, chat_id, html, *, reply_markup=None, silent=False):  # noqa: ANN001
+        msg = {"chat_id": chat_id, "text": html, "reply_markup": reply_markup, "silent": silent}
+        self.sent.append(msg)
+        buttons = " | ".join(
+            b["text"] for row in (reply_markup or {}).get("inline_keyboard", []) for b in row
+        )
+        print(f"--- to {chat_id}{' (silent)' if silent else ''} ---\n{html}")
+        if buttons:
+            print(f"[{buttons}]")
+        print()
+        return {"message_id": len(self.sent)}
+
+
+@dataclass
+class Report:
+    mode: str
+    open_ipos: int = 0
+    posted: int = 0
+    users: int = 0
+    no_match: int = 0
+    blocked: int = 0
+    failed: int = 0
+    notes: list[str] = field(default_factory=list)
+
+    def line(self) -> str:
+        if self.mode == cards.PHASE_CHANNEL:
+            body = f"{self.open_ipos} open IPOs, {self.posted} channel posts"
+        else:
+            body = (
+                f"{self.open_ipos} open IPOs, {self.users} users, {self.posted} cards, "
+                f"{self.no_match} no-match, {self.blocked} blocked"
+            )
+        return f"IPODevta {self.mode}: {body}, {self.failed} failed"
+
+
+def run_channel(
+    ipos: list[dict[str, Any]],
     *,
-    ts: str,
     today: str,
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for ipo in enriched:
-        cons = gmp.from_ipoguru(ipo)
-        row = {
-            "ipo_id": ipo["ipo_id"],
-            "slug": ipo.get("slug"),
-            "ts": ts,
-            "date": today,
-            "name": ipo["name"],
-            "board": ipo["board"],
-            "price_high": ipo.get("price_high"),
-            "lot_size": ipo.get("lot_size"),
-            "close_date": ipo.get("close_date"),
-            "ipo_no": ipo.get("ipo_no"),
-            "web_url": ipo.get("web_url"),
-            "gmp": cons["gmp"] if cons else None,
-            "gmp_pct": cons["gmp_pct"] if cons else None,
-            "n_sources": cons["n_sources"] if cons else None,
-            "spread_pct": cons["spread_pct"] if cons else None,
-            "confidence": cons["confidence"] if cons else None,
-            "sub_total": ipo.get("sub_total"),
-            "sub_qib": ipo.get("sub_qib"),
-            "sub_nii": ipo.get("sub_nii"),
-            "sub_retail": ipo.get("sub_retail"),
-            "sub_source": ipo.get("sub_source"),
-            "source": "hybrid",
-        }
-        rows.append(row)
-        if cons:
-            ipo.update(cons)
-        else:
-            ipo.setdefault("gmp", None)
-            ipo.setdefault("gmp_pct", None)
-            ipo.setdefault("n_sources", None)
-            ipo.setdefault("spread_pct", None)
-            ipo.setdefault("confidence", None)
-    return rows
+    as_of: str,
+    sent: state.SentLog,
+    sender: Sender,
+    channel: str,
+) -> Report:
+    report = Report(cards.PHASE_CHANNEL, open_ipos=len(ipos))
+    try:
+        if sent.header_id is None:
+            msg = sender.send(channel, cards.render_header(ipos, today=today, as_of=as_of))
+            sent.set_header(msg["message_id"])
+            report.posted += 1
+        for ipo in ipos:
+            if sent.channel_sent(ipo["ipo_id"]):
+                continue
+            html = cards.render_card(ipo, today=today, phase=cards.PHASE_CHANNEL, as_of=as_of)
+            msg = sender.send(channel, html)
+            sent.mark_channel(ipo["ipo_id"], msg["message_id"])
+            report.posted += 1
+    except telegram.TelegramError as exc:
+        report.failed += 1
+        report.notes.append(f"channel post failed: {exc}")
+        log.error("Channel post failed: %s", exc)
+    return report
 
 
-def collect(
-    *, require_gmp: bool = True
-) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
-    """
-    Hybrid collect. Returns (ipos, warnings, stats).
-    stats: guru_calls, bse_matched, bse_total, unmatched_names
-    """
-    warnings: list[str] = []
-    stats: dict[str, Any] = {
-        "guru_calls": 0,
-        "bse_matched": 0,
-        "bse_total": 0,
-        "unmatched_names": [],
+def run_bot(
+    ipos: list[dict[str, Any]],
+    users: dict[str, dict[str, Any]],
+    *,
+    today: str,
+    as_of: str,
+    sent: state.SentLog,
+    sender: Sender,
+) -> Report:
+    report = Report(cards.PHASE_BOT, open_ipos=len(ipos), users=len(users))
+    keyboard = cards.dm_keyboard(sent.header_id)
+    rendered = {
+        i["ipo_id"]: cards.render_card(i, today=today, phase=cards.PHASE_BOT, as_of=as_of)
+        for i in ipos
     }
-    before = int(ipoguru._usage_today().get("requests") or 0)  # noqa: SLF001
-    try:
-        enriched = ipoguru.fetch_open_ipos(allow_network=True)
-    except ipoguru.IpoGuruError as exc:
-        raise AbortBroadcast(f"IPO Guru: {exc}") from exc
-    after = int(ipoguru._usage_today().get("requests") or 0)  # noqa: SLF001
-    stats["guru_calls"] = max(0, after - before)
 
-    with_gmp = [i for i in enriched if i.get("gmp") is not None]
-    if require_gmp and not with_gmp:
-        raise AbortBroadcast("IPO Guru returned open IPOs but no GMP readings")
-    if len(with_gmp) < len(enriched):
-        warnings.append(
-            f"GMP missing for {len(enriched) - len(with_gmp)}/{len(enriched)} open IPOs"
-        )
-
-    try:
-        bse_rows = bse.load_live_ipos()
-        stats["bse_total"] = len(bse_rows)
-        enriched, unmatched = match.attach_bse_subscription(enriched, bse_rows)
-        with_bse = sum(1 for i in enriched if i.get("sub_source") == "bse")
-        stats["bse_matched"] = with_bse
-        stats["unmatched_names"] = [
-            str(u.get("name") or "?") for u in unmatched[:12]
-        ]
-        log.info("BSE subscription attached to %d/%d Guru IPOs", with_bse, len(enriched))
-        if unmatched:
-            sample = ", ".join(
-                f"{u.get('name')}({u.get('match_score', 0):.0f})" for u in unmatched[:8]
-            )
-            warnings.append(f"Unmatched BSE rows ({len(unmatched)}): {sample}")
-    except (bse.BseError, bse.SourceBroken) as exc:
-        warnings.append(f"BSE subscription unavailable: {exc}")
-        log.warning("BSE failed (continuing with Guru totals only): %s", exc)
-    except Exception as exc:  # noqa: BLE001
-        warnings.append(f"BSE subscription error: {exc}")
-        log.exception("BSE unexpected failure")
-
-    remaining = ipoguru.usage_remaining()
-    log.info(
-        "Hybrid collect: %d open (%d with GMP); Guru requests left today=%d",
-        len(enriched),
-        len(with_gmp),
-        remaining,
-    )
-    return enriched, warnings, stats
+    for chat_id, prefs in users.items():
+        already = set(sent.dm_sent(chat_id))
+        passing = [i for i in ipos if filters.passes(i, prefs)]
+        try:
+            if not passing:
+                if state.NO_MATCH not in already:
+                    sender.send(chat_id, cards.render_no_match(), reply_markup=keyboard)
+                    sent.mark_dm(chat_id, state.NO_MATCH)
+                    report.no_match += 1
+                continue
+            for n, ipo in enumerate(passing):
+                if ipo["ipo_id"] in already:
+                    continue
+                sender.send(chat_id, rendered[ipo["ipo_id"]], reply_markup=keyboard, silent=n > 0)
+                sent.mark_dm(chat_id, ipo["ipo_id"])
+                report.posted += 1
+        except telegram.ChatUnavailable:
+            report.blocked += 1
+            log.info("User %s blocked the bot or is gone - skipped", state.chat_hash(chat_id))
+        except telegram.TelegramError as exc:
+            report.failed += 1
+            log.warning("DM to %s failed: %s", state.chat_hash(chat_id), exc)
+    return report
 
 
-def _write_step_summary(line: str) -> None:
+def market_payload(
+    ipos: list[dict[str, Any]], *, today: str, as_of: str, phase: str, header_id: int | None
+) -> dict[str, Any]:
+    return {
+        "date": today,
+        "as_of": as_of,
+        "phase": phase,
+        "today_url": cards.today_url(header_id),
+        "ipos": [
+            {
+                "ipo_id": i["ipo_id"],
+                "board": i.get("board"),
+                "gmp_pct": i.get("gmp_pct"),
+                "sub_total": i.get("sub_total"),
+                "card": cards.render_card(i, today=today, phase=phase, as_of=as_of),
+            }
+            for i in ipos
+        ],
+    }
+
+
+def _write_step_summary(text: str) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
-    if not path:
-        return
-    try:
+    if path:
         with open(path, "a", encoding="utf-8") as fh:
-            fh.write(line.rstrip() + "\n")
-    except Exception as exc:  # noqa: BLE001
-        log.warning("GITHUB_STEP_SUMMARY write failed: %s", exc)
+            fh.write(text.rstrip() + "\n")
 
 
-def _report_line(
+def _load_fixture(path: str, today: str) -> Collected:
+    rows = json.loads(Path(path).read_text(encoding="utf-8"))
+    return Collected(ipos=order([r for r in rows if is_open_on(r, today)]))
+
+
+def run(
+    mode: str,
     *,
-    guru_calls: int,
-    bse_matched: int,
-    bse_total: int,
-    unmatched: list[str],
-    briefs_sent: int,
-    briefs_failed: int,
-    channel_posted: bool | str,
-) -> str:
-    unmatched_s = ", ".join(unmatched[:6]) if unmatched else "none"
-    return (
-        f"Guru calls={guru_calls}; BSE matched {bse_matched}/{bse_total} "
-        f"(unmatched: {unmatched_s}); briefs sent={briefs_sent} failed={briefs_failed}; "
-        f"channel={channel_posted}"
-    )
+    dry_run: bool = False,
+    force: bool = False,
+    fixture: str | None = None,
+    only_chat: str | None = None,
+) -> int:
+    now = config.now_ist()
+    today = now.date().isoformat()
+    as_of = now.strftime("%H:%M")
+    deadline = config.CHANNEL_DEADLINE if mode == cards.PHASE_CHANNEL else config.BOT_DEADLINE
 
-
-def run(mode: str, *, preview_chat_id: str | None = None) -> int:
-    dry_run = mode == "dry-run"
-    require_gmp = mode in ("alert", "dry-run")
-
-    today = config.today_ist()
-    ts = config.format_ist()
-    collect_hhmm = _hhmm_from_ts(ts)
+    if not force and not config.is_market_day(today):
+        log.info("%s is not a market day - nothing to send", today)
+        return 0
+    sent = state.SentLog(today, persist=not dry_run)
+    if not force and sent.done(mode):
+        log.info("%s run already completed for %s", mode, today)
+        return 0
+    if not force and as_of > deadline:
+        msg = f"IPODevta {mode}: run started at {as_of} IST, after the {deadline} cutoff. Skipped to avoid stale posts."
+        log.warning(msg)
+        if not dry_run:
+            telegram.admin(msg)
+        return 0
 
     try:
-        n = users.drain_updates(dry_run=False)
-        log.info("Processed %d Telegram updates", n)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("drain_updates: %s", exc)
-
-    if mode == "commands":
-        log.info("Commands-only mode complete.")
-        return 0
-
-    if mode == "preview":
-        chat_id = preview_chat_id or os.environ.get("PREVIEW_CHAT_ID", "").strip()
-        if not chat_id:
-            log.error("preview mode requires PREVIEW_CHAT_ID")
-            return 1
-        prefs = state.get_or_create_user(chat_id)
-        from bot import preview, preview_cache
-
-        source, brief = preview.build_brief_preview(prefs)
-        if brief is None:
-            text = "Nothing to show yet.\nCheck again later."
-        else:
-            text = render.render_brief(brief)
-        notify.send_message(
-            chat_id,
-            text,
-            reply_markup=keyboards.brief_inline(),
-            disable_notification=True,
-            dry_run=False,
-        )
-        if preview_cache.publish_user_preview(chat_id, text, prefs, source=source):
-            log.info("Preview cache published for %s", chat_id)
-        log.info("Preview brief sent to %s (%s)", chat_id, source)
-        return 0
-
-    skip_collect = (
-        mode == "alert"
-        and not dry_run
-        and state.alert_already_ran(today)
-    )
-    warnings: list[str] = []
-    stats: dict[str, Any] = {
-        "guru_calls": 0,
-        "bse_matched": 0,
-        "bse_total": 0,
-        "unmatched_names": [],
-    }
-    snap_rows: list[dict[str, Any]] = []
-
-    if skip_collect:
-        log.info("Alert already recorded for %s — skip Guru collect", today)
-        enriched = state.latest_ipos_for_date(today)
-        all_snaps = state.load_snapshots()
-        if not enriched:
-            report = _report_line(
-                guru_calls=0,
-                bse_matched=0,
-                bse_total=0,
-                unmatched=[],
-                briefs_sent=0,
-                briefs_failed=0,
-                channel_posted="already",
-            )
-            log.info("Alert report: %s", report)
-            _write_step_summary(report)
-            notify.admin(f"IPO alert report: {report}", dry_run=False)
-            return 0
-    else:
-        try:
-            enriched, warnings, stats = collect(require_gmp=require_gmp)
-        except AbortBroadcast as exc:
-            notify.admin(f"IPO bot abort ({mode}): {exc}", dry_run=dry_run)
-            log.error("%s", exc)
-            return 1
-
-        snap_rows = build_snapshot_rows(enriched, ts=ts, today=today)
+        collected = _load_fixture(fixture, today) if fixture else collect(today)
+    except CollectError as exc:
+        log.error("%s", exc)
         if not dry_run:
-            state.append_snapshots(snap_rows)
+            telegram.admin(f"IPODevta {mode} aborted, nothing sent: {exc}")
+        return 1
+    ipos = collected.ipos
+    if not dry_run and not fixture:
+        state.append_snapshots(snapshot_rows(ipos, date=today, ts=config.format_ist(), phase=mode))
 
-        all_snaps = state.load_snapshots()
-        if dry_run:
-            all_snaps = list(all_snaps) + snap_rows
+    sender: Sender = DryRunSender() if dry_run else LiveSender()
 
-    for w in warnings:
-        log.warning("%s", w)
-
-    if mode == "snapshot":
-        if warnings:
-            notify.admin(
-                "IPO bot snapshot warnings:\n" + "\n".join(warnings[:20]),
-                dry_run=dry_run,
-            )
-        log.info("Snapshot mode complete (%d rows). No broadcast.", len(snap_rows))
-        return 0
-
-    # --- alert / dry-run ---
-    channel_posted: bool | str = False
-    channel_msgs = render.render_channel(
-        today, enriched, history=all_snaps, collect_hhmm=collect_hhmm
-    )
-    if dry_run:
-        for i, channel_msg in enumerate(channel_msgs, 1):
-            print(f"=== CHANNEL ({i}/{len(channel_msgs)}) ===")
-            print(channel_msg)
-            print()
-        channel_posted = "dry-run" if channel_msgs else False
-    elif not channel_msgs:
-        log.info("No open IPOs — skip channel")
-        channel_posted = False
-    elif not state.channel_already_sent(today):
+    def push(notes: list[str]) -> None:
+        if dry_run or not config.worker_base_url():
+            return
         try:
-            # One post per day: a single HTML message.
-            notify.broadcast(channel_msgs[0], dry_run=False)
-            state.mark_channel_sent(today, [c["ipo_id"] for c in enriched])
-            channel_posted = True
-            log.info("Channel post sent (%d IPOs)", len(enriched))
-        except notify.NotifyError as exc:
-            log.error("Channel post failed: %s", exc)
-            channel_posted = "failed"
+            worker_api.push_market(
+                market_payload(ipos, today=today, as_of=as_of, phase=mode, header_id=sent.header_id)
+            )
+        except worker_api.WorkerError as exc:
+            notes.append(str(exc))
+
+    if mode == cards.PHASE_CHANNEL:
+        report = run_channel(
+            ipos, today=today, as_of=as_of, sent=sent, sender=sender, channel=config.channel_id()
+        )
+        push(report.notes)
     else:
-        log.info("Channel already sent for %s - skip", today)
-        channel_posted = "already"
-
-    briefs_sent = 0
-    briefs_failed = 0
-    user_map = state.load_users()
-
-    for chat_id, prefs in user_map.items():
-        if not dry_run and state.brief_already_sent(today, chat_id):
-            log.info("User %s already briefed for %s - skip", chat_id, today)
-            continue
-
-        brief = brief_mod.build_brief(
-            enriched,
-            prefs,
-            all_snaps,
-            today,
-            collect_hhmm=collect_hhmm,
-        )
-        if brief is None:
-            log.info("User %s: nothing open - no brief", chat_id)
-            continue
-
-        text = render.render_brief(brief)
-        silent = not brief.notify
-
-        if dry_run:
-            print(f"=== BRIEF {chat_id} quiet={brief.quiet} notify={brief.notify} ===")
-            print(text)
-            print()
-            briefs_sent += 1
-            continue
-
+        report = Report(cards.PHASE_BOT, open_ipos=len(ipos))
+        push(report.notes)
         try:
-            notify.dm(
-                chat_id,
-                text,
-                reply_markup=keyboards.brief_inline(),
-                disable_notification=silent,
-                dry_run=False,
+            users = (
+                {only_chat: {}} if only_chat and dry_run else worker_api.fetch_users()
             )
-            visible_ids = [
-                r.ipo_id
-                for r in (*brief.closing, *brief.fits, *brief.waiting, *brief.skip)
-            ]
-            state.mark_brief_sent(
-                today,
-                chat_id,
-                ipo_ids=visible_ids,
-                quiet=brief.quiet,
-            )
-            briefs_sent += 1
-            log.info(
-                "Brief sent to %s (quiet=%s notify=%s)",
-                chat_id,
-                brief.quiet,
-                brief.notify,
-            )
-        except Exception as exc:  # noqa: BLE001
-            briefs_failed += 1
-            log.warning("Brief failed for %s: %s", chat_id, exc)
-
-    report = _report_line(
-        guru_calls=int(stats.get("guru_calls") or 0),
-        bse_matched=int(stats.get("bse_matched") or 0),
-        bse_total=int(stats.get("bse_total") or 0),
-        unmatched=list(stats.get("unmatched_names") or []),
-        briefs_sent=briefs_sent,
-        briefs_failed=briefs_failed,
-        channel_posted=channel_posted,
-    )
-    log.info("Alert report: %s", report)
-    _write_step_summary(report)
-    if not dry_run:
-        notify.admin(f"IPO alert report: {report}", dry_run=False)
-        if warnings:
-            notify.admin(
-                "IPO bot alert warnings:\n" + "\n".join(warnings[:20]),
-                dry_run=False,
-            )
-
-    return 0
-
-
-def run_fixture_dry(
-    fixture_name: str,
-    *,
-    to_admin: bool = False,
-) -> int:
-    """Render a brief fixture (no Guru calls, no state writes)."""
-    from tests.brief_support import build_from_fixture, render_fixture
-
-    text = render_fixture(fixture_name)
-    if text is None:
-        log.info("Fixture %s → no brief (None)", fixture_name)
-        print("(no brief)")
-        return 0
-
-    b = build_from_fixture(fixture_name)
-    markup = keyboards.brief_inline()
-    print(text)
-    print("--- keyboard ---")
-    print(markup)
-    if b is not None:
-        print(f"--- notify_sound={b.notify} quiet={b.quiet} ---")
-
-    if to_admin:
-        chat = config.admin_chat_id()
-        if not chat:
-            log.error("ADMIN_CHAT_ID unset")
+        except worker_api.WorkerError as exc:
+            log.error("%s", exc)
+            if not dry_run:
+                telegram.admin(f"IPODevta bot aborted, no DMs sent: {exc}")
             return 1
-        notify.send_message(
-            chat,
-            text,
-            reply_markup=markup,
-            disable_notification=not (b and b.notify),
-            dry_run=False,
-        )
-        log.info("Fixture %s sent to admin %s", fixture_name, chat)
-    return 0
+        if only_chat:
+            users = {only_chat: users.get(only_chat, {})}
+        bot_report = run_bot(ipos, users, today=today, as_of=as_of, sent=sent, sender=sender)
+        bot_report.notes = report.notes + bot_report.notes
+        report = bot_report
+
+    if report.failed == 0 and not only_chat:
+        sent.mark_done(mode)
+
+    lines = [report.line(), *collected.warnings, *report.notes]
+    if not fixture:
+        lines.append(f"IPO Guru calls left today: {ipoguru.usage_remaining()}")
+    summary = "\n".join(lines)
+    log.info("%s", summary)
+    _write_step_summary(summary)
+    if not dry_run:
+        telegram.admin(summary)
+    return 0 if report.failed == 0 else 1
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="IPO GMP screening bot")
-    parser.add_argument(
-        "--mode",
-        choices=("snapshot", "alert", "dry-run", "commands", "preview"),
-        required=True,
-    )
-    parser.add_argument(
-        "--chat-id",
-        default=None,
-        help="Target chat for --mode preview",
-    )
-    parser.add_argument(
-        "--fixture",
-        default=None,
-        help="With dry-run: render tests/fixtures/brief/<name>.json (no Guru/state)",
-    )
-    parser.add_argument(
-        "--to-admin",
-        action="store_true",
-        help="With --fixture: send rendered brief to ADMIN_CHAT_ID",
-    )
+    parser = argparse.ArgumentParser(description="IPODevta daily runs")
+    parser.add_argument("mode", choices=MODES)
+    parser.add_argument("--dry-run", action="store_true", help="print messages, send nothing, write no state")
+    parser.add_argument("--force", action="store_true", help="ignore market-day, deadline and already-done checks")
+    parser.add_argument("--fixture", help="JSON list of IPO rows to use instead of live data")
+    parser.add_argument("--only-chat", help="bot mode: send to this one chat id only")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if callable(reconfigure):
-            try:
-                reconfigure(errors="replace")
-            except Exception:  # noqa: BLE001
-                pass
+            reconfigure(encoding="utf-8", errors="replace")
     config.load_dotenv()
 
     try:
-        if args.mode == "dry-run" and args.fixture:
-            return run_fixture_dry(args.fixture, to_admin=args.to_admin)
-        return run(args.mode, preview_chat_id=args.chat_id)
+        return run(
+            args.mode,
+            dry_run=args.dry_run,
+            force=args.force,
+            fixture=args.fixture,
+            only_chat=args.only_chat,
+        )
     except Exception as exc:  # noqa: BLE001
         tb = traceback.format_exc()
         log.error("Unhandled: %s\n%s", exc, tb)
-        try:
-            notify.admin(f"IPO bot crash ({args.mode}):\n{exc}\n\n{tb[-3000:]}")
-        except Exception:  # noqa: BLE001
-            pass
+        if not args.dry_run:
+            telegram.admin(f"IPODevta {args.mode} crashed:\n{exc}\n\n{tb[-3000:]}")
         return 1
 
 

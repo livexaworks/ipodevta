@@ -2,19 +2,16 @@ name = "ipo-devta-bot"
 main = "worker.js"
 compatibility_date = "2026-09-01"
 
-# 05:25 UTC = 10:55 IST, weekdays. Fires repository_dispatch event `alert`.
+# Weekdays, UTC. 04:00 UTC = 9:30 IST (channel run), 09:00 UTC = 14:30 IST (bot run).
+# Each fires a GitHub repository_dispatch; worker.js CRON_EVENTS maps them.
 [triggers]
-crons = ["25 5 * * 1-5"]
+crons = ["0 4 * * 1-5", "0 9 * * 1-5"]
 
 [[kv_namespaces]]
 binding = "PREFS"
 id = "44fd223f49a64286baf31fea04e33218"
 preview_id = "44fd223f49a64286baf31fea04e33218"
 
-# Set secrets via:
-#   wrangler secret put TELEGRAM_TOKEN
-#   wrangler secret put CHANNEL_ID
-#   wrangler secret put WEBHOOK_SECRET
-#   wrangler secret put EXPORT_SECRET
-#   wrangler secret put GITHUB_TOKEN
-#   wrangler secret put GITHUB_REPO
+# Secrets (wrangler secret put NAME):
+#   TELEGRAM_TOKEN, CHANNEL_ID, ADMIN_CHAT_ID, WEBHOOK_SECRET, EXPORT_SECRET,
+#   GITHUB_TOKEN (fine-grained, this repo, Contents: read & write), GITHUB_REPO

@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-FIXTURES_DIR = ROOT / "fixtures"
 SNAPSHOTS_PATH = DATA_DIR / "snapshots.json"
 SENT_PATH = DATA_DIR / "sent.json"
-USERS_PATH = DATA_DIR / "users.json"
+HOLIDAYS_PATH = DATA_DIR / "holidays.json"
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-REPO_URL = "https://github.com/weblrsolutions/ipodevta"
-USER_AGENT = f"IPOGmpBot/1.0 (+{REPO_URL}) personal-use"
+REPO_URL = "https://github.com/livexaworks/ipodevta"
+USER_AGENT = f"IPODevtaBot/2.0 (+{REPO_URL})"
 
-# BSE public bookbuilding APIs (category subscription only — not scraped HTML).
+# BSE public bookbuilding APIs (category subscription only).
 BSE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -28,7 +28,6 @@ BSE_HEADERS = {
     "Referer": "https://www.bseindia.com/",
     "Origin": "https://www.bseindia.com",
 }
-
 BSE_LIVE = (
     "https://api.bseindia.com/BseIndiaAPI/api/GetPublicIssue_par_updated/w"
     "?flag=1&status=L"
@@ -42,19 +41,17 @@ BSE_CATDEM_NEW = (
     "Pubissues_GetBkbldgCatdem_PAR_bbnew_ng/w?IPO_NO={ipo_no}"
 )
 
-# Default gates (used when a user has not customized).
-# Mainboard and SME have separate GMP triggers.
+# Default filters for users who have not customised (mirrors worker.js DEFAULTS).
+DEFAULT_BOARD = "main"
 MIN_GMP_MAIN = 34.0
 MIN_GMP_SME = 48.0
-MIN_GMP_PCT = MIN_GMP_MAIN  # legacy alias: mainboard bar
 MIN_TOTAL_SUB = 1.0
-MIN_CONFIDENCE = "medium"
-INCLUDE_SME = False
-BLOCK_FALLING_GMP = True
 
-CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
+# Daily schedule (IST). Runs after the deadline skip and alert the admin.
+CHANNEL_DEADLINE = "13:00"
+BOT_DEADLINE = "16:30"
 
-SNAPSHOT_RETENTION_DAYS = 120
+RETENTION_DAYS = 14
 
 
 def load_dotenv(path: Path | None = None) -> None:
@@ -62,8 +59,7 @@ def load_dotenv(path: Path | None = None) -> None:
     env_path = path or (ROOT / ".env")
     if not env_path.is_file():
         return
-    text = env_path.read_text(encoding="utf-8-sig")
-    for line in text.splitlines():
+    for line in env_path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -74,52 +70,40 @@ def load_dotenv(path: Path | None = None) -> None:
             os.environ[key] = value
 
 
-def telegram_token() -> str:
+def env(name: str, default: str = "") -> str:
     load_dotenv()
-    return os.environ.get("TELEGRAM_TOKEN", "").strip()
+    return os.environ.get(name, default).strip()
+
+
+def telegram_token() -> str:
+    return env("TELEGRAM_TOKEN")
 
 
 def channel_id() -> str:
-    load_dotenv()
-    return os.environ.get("CHANNEL_ID", "@ipodevta").strip()
+    return env("CHANNEL_ID", "@ipodevta")
+
+
+def channel_url() -> str:
+    """Public t.me link. Numeric channel ids need CHANNEL_URL to be set."""
+    explicit = env("CHANNEL_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    cid = channel_id()
+    if cid.startswith("@"):
+        return f"https://t.me/{cid[1:]}"
+    return "https://t.me/ipodevta"
 
 
 def admin_chat_id() -> str:
-    load_dotenv()
-    return os.environ.get("ADMIN_CHAT_ID", "").strip()
+    return env("ADMIN_CHAT_ID")
 
 
-def webhook_base_url() -> str:
-    load_dotenv()
-    return os.environ.get("WEBHOOK_BASE_URL", "").strip()
+def worker_base_url() -> str:
+    return env("WEBHOOK_BASE_URL").rstrip("/")
 
 
-def webhook_secret() -> str:
-    load_dotenv()
-    return os.environ.get("WEBHOOK_SECRET", "").strip()
-
-
-def webhook_export_url() -> str:
-    load_dotenv()
-    explicit = os.environ.get("WEBHOOK_EXPORT_URL", "").strip()
-    if explicit:
-        return explicit
-    base = webhook_base_url().rstrip("/")
-    return f"{base}/export/users" if base else ""
-
-
-def webhook_export_secret() -> str:
-    load_dotenv()
-    return os.environ.get("EXPORT_SECRET", "").strip()
-
-
-def webhook_mode() -> bool:
-    """True when instant webhook replies are configured (skip Actions polling)."""
-    load_dotenv()
-    flag = os.environ.get("TELEGRAM_WEBHOOK", "").strip().lower()
-    if flag in ("1", "true", "yes", "on"):
-        return True
-    return bool(webhook_base_url())
+def worker_secret() -> str:
+    return env("EXPORT_SECRET")
 
 
 def now_ist() -> datetime:
@@ -127,14 +111,22 @@ def now_ist() -> datetime:
 
 
 def today_ist() -> str:
-    """Return today's date in IST as YYYY-MM-DD."""
     return now_ist().date().isoformat()
 
 
 def format_ist(dt: datetime | None = None) -> str:
     d = dt or now_ist()
-    if d.tzinfo is None:
-        d = d.replace(tzinfo=IST)
-    else:
-        d = d.astimezone(IST)
+    d = d.replace(tzinfo=IST) if d.tzinfo is None else d.astimezone(IST)
     return d.isoformat(timespec="seconds")
+
+
+def holidays() -> set[str]:
+    if not HOLIDAYS_PATH.is_file():
+        return set()
+    data = json.loads(HOLIDAYS_PATH.read_text(encoding="utf-8"))
+    return {str(d) for d in data.get("dates") or []}
+
+
+def is_market_day(date_iso: str) -> bool:
+    d = datetime.strptime(date_iso, "%Y-%m-%d")
+    return d.weekday() < 5 and date_iso not in holidays()

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from bot.sources import bse
 
-FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "bse"
 
 
 def test_parse_live_equity_ipos():

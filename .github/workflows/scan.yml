@@ -1,25 +1,26 @@
 name: IPO scan
 on:
+  # Primary trigger: the Cloudflare Worker cron dispatches `channel` at 9:30 IST
+  # and `bot` at 14:30 IST (GitHub's own cron runs late, often by an hour or more).
+  repository_dispatch:
+    types: [channel, bot]
+  # Fallback only. Runs are idempotent and skip once today's run is done;
+  # past the deadline (13:00 channel / 16:30 bot) they alert the admin instead.
   schedule:
-    # 11:15 IST fallback if the Worker cron (10:55 IST) already delivered.
-    # Alert mode checks sent.json and skips the Guru collect when so.
-    - cron: "45 5 * * 1-5"
-    - cron: "45 11 * * 1-5"   # 17:15 IST, snapshot mode (weekdays)
-    # Fallback poll if webhook is not configured. With TELEGRAM_WEBHOOK=1 this
-    # job no-ops quickly (getUpdates skipped).
-    - cron: "*/5 * * * *"
+    - cron: "20 4 * * 1-5"   # 09:50 IST -> channel
+    - cron: "20 9 * * 1-5"   # 14:50 IST -> bot
   workflow_dispatch:
     inputs:
       mode:
         type: choice
-        options: [snapshot, alert, dry-run, commands, preview]
-        default: dry-run
-      chat_id:
-        description: "Chat id for preview mode"
-        required: false
-        default: ""
-  repository_dispatch:
-    types: [preview, alert]
+        options: [channel, bot]
+        default: channel
+      dry_run:
+        type: boolean
+        default: true
+      force:
+        type: boolean
+        default: false
 
 concurrency:
   group: ipo-scan
@@ -34,12 +35,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - name: Pull latest data/
+      - name: Refresh data/ from the branch tip
+        # A queued run checks out the commit it was triggered on; the sent log
+        # must be the newest one or a fallback run could re-send.
         run: |
-          # Concurrency group prevents overlapping writers; still refresh data/
-          # so a second runner sees briefs already marked in sent.json.
           git fetch origin "${GITHUB_REF_NAME}" --depth=1
-          git checkout "FETCH_HEAD" -- data/ || true
+          git checkout FETCH_HEAD -- data/ || true
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -48,41 +49,35 @@ jobs:
       - name: Pick mode
         id: m
         run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "mode=${{ github.event.action }}" >> $GITHUB_OUTPUT
-            echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
-            echo "chat_id=${{ inputs.chat_id }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "45 5 * * 1-5" ]; then
-            echo "mode=alert" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "45 11 * * 1-5" ]; then
-            echo "mode=snapshot" >> $GITHUB_OUTPUT
-          else
-            echo "mode=commands" >> $GITHUB_OUTPUT
-          fi
-      - name: Run bot
+          flags=""
+          case "${{ github.event_name }}" in
+            repository_dispatch) mode="${{ github.event.action }}" ;;
+            workflow_dispatch)
+              mode="${{ inputs.mode }}"
+              [ "${{ inputs.dry_run }}" = "true" ] && flags="$flags --dry-run"
+              [ "${{ inputs.force }}" = "true" ] && flags="$flags --force"
+              ;;
+            schedule)
+              if [ "${{ github.event.schedule }}" = "20 4 * * 1-5" ]; then mode=channel; else mode=bot; fi ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "flags=$flags" >> "$GITHUB_OUTPUT"
+      - name: Run
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHANNEL_ID:     ${{ secrets.CHANNEL_ID }}
-          ADMIN_CHAT_ID:  ${{ secrets.ADMIN_CHAT_ID }}
-          TELEGRAM_WEBHOOK: ${{ secrets.TELEGRAM_WEBHOOK }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
           WEBHOOK_BASE_URL: ${{ secrets.WEBHOOK_BASE_URL }}
           EXPORT_SECRET: ${{ secrets.EXPORT_SECRET }}
           IPOGURU_API_KEY: ${{ secrets.IPOGURU_API_KEY }}
-          IPOGURU_MAX_REQUESTS_PER_DAY: "10"
-          PREVIEW_CHAT_ID: ${{ steps.m.outputs.chat_id }}
-        run: |
-          if [ "${{ steps.m.outputs.mode }}" = "preview" ]; then
-            python -m bot.run --mode preview --chat-id "${{ steps.m.outputs.chat_id }}"
-          else
-            python -m bot.run --mode ${{ steps.m.outputs.mode }}
-          fi
+        run: python -m bot.run ${{ steps.m.outputs.mode }} ${{ steps.m.outputs.flags }}
       - name: Commit state
         if: always()
         run: |
           git config user.name  "ipo-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/
-          git diff --staged --quiet || git commit -m "state: $(date -u +%F_%H%M)"
+          git add data/snapshots.json data/sent.json data/ipoguru_cache.json data/ipoguru_usage.json
+          git diff --staged --quiet && exit 0
+          git commit -m "state: $(date -u +%F_%H%M) ${{ steps.m.outputs.mode }}"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
           git push

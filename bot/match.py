@@ -1,4 +1,4 @@
-"""Name canonicalisation + fuzzy matching across GMP / exchange sources."""
+"""Fuzzy-match BSE subscription rows onto IPO Guru rows by company name."""
 
 from __future__ import annotations
 
@@ -74,32 +74,6 @@ def match_one(
     if score < threshold:
         return None, float(score)
     return str(match_key), float(score)
-
-
-def join_gmp_to_ipos(
-    ipos: list[dict[str, Any]],
-    quotes: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """
-    Attach matching GMP quotes to each IPO (by canon ipo_id).
-    Returns (ipos_with_quotes, unmatched_quotes).
-    """
-    candidates = {canon(ipo["name"]): ipo["name"] for ipo in ipos}
-    buckets: dict[str, list[dict[str, Any]]] = {cid: [] for cid in candidates}
-    unmatched: list[dict[str, Any]] = []
-
-    for q in quotes:
-        cid, score = match_one(q["raw_name"], candidates)
-        if cid is None:
-            unmatched.append({**q, "match_score": score})
-            continue
-        buckets[cid].append(q)
-
-    enriched: list[dict[str, Any]] = []
-    for ipo in ipos:
-        cid = canon(ipo["name"])
-        enriched.append({**ipo, "ipo_id": cid, "gmp_quotes": buckets.get(cid, [])})
-    return enriched, unmatched
 
 
 def attach_bse_subscription(

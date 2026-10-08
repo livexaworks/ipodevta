@@ -1,10 +1,16 @@
-"""Read/write data/*.json - snapshots, sent log, user prefs."""
+"""data/*.json state: snapshots and the per-message sent log.
+
+The repo is public, so the sent log never stores raw Telegram chat ids: users are
+keyed by an HMAC of the chat id using the EXPORT_SECRET Actions secret.
+"""
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -12,216 +18,100 @@ from bot import config
 
 log = logging.getLogger(__name__)
 
+NO_MATCH = "_none"
+
 
 def _read(path: Path, default: Any) -> Any:
     if not path.is_file():
         return default
     text = path.read_text(encoding="utf-8")
-    if not text.strip():
-        return default
-    return json.loads(text)
+    return json.loads(text) if text.strip() else default
 
 
 def _write(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def load_snapshots() -> list[dict[str, Any]]:
-    data = _read(config.SNAPSHOTS_PATH, [])
-    if not isinstance(data, list):
-        raise ValueError("snapshots.json must be a list")
-    return data
+def _cutoff() -> str:
+    return (date.fromisoformat(config.today_ist()) - timedelta(days=config.RETENTION_DAYS)).isoformat()
 
 
-def save_snapshots(rows: list[dict[str, Any]]) -> None:
-    cutoff = (config.now_ist() - timedelta(days=config.SNAPSHOT_RETENTION_DAYS)).date()
-    pruned: list[dict[str, Any]] = []
-    for row in rows:
-        d = row.get("date")
-        if not d:
-            pruned.append(row)
-            continue
-        try:
-            row_date = datetime.strptime(d, "%Y-%m-%d").date()
-        except ValueError:
-            pruned.append(row)
-            continue
-        if row_date >= cutoff:
-            pruned.append(row)
-    _write(config.SNAPSHOTS_PATH, pruned)
+# --- snapshots -------------------------------------------------------------
 
 
-def append_snapshots(new_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    rows = load_snapshots()
-    rows.extend(new_rows)
-    save_snapshots(rows)
-    return rows
+def append_snapshots(rows: list[dict[str, Any]]) -> None:
+    cutoff = _cutoff()
+    kept = [r for r in _read(config.SNAPSHOTS_PATH, []) if str(r.get("date") or "") >= cutoff]
+    _write(config.SNAPSHOTS_PATH, kept + rows)
 
 
-def load_sent() -> dict[str, Any]:
-    data = _read(config.SENT_PATH, {})
-    if not isinstance(data, dict):
-        raise ValueError("sent.json must be an object")
-    return data
+# --- sent log --------------------------------------------------------------
 
 
-def save_sent(data: dict[str, Any]) -> None:
-    _write(config.SENT_PATH, data)
+def chat_hash(chat_id: str | int) -> str:
+    key = config.worker_secret().encode() or b"local-dev"
+    return hmac.new(key, str(chat_id).encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def brief_key(chat_id: str | int, date: str) -> str:
-    return f"brief:{chat_id}:{date}"
+class SentLog:
+    """Load once per run, save after every send so a crash never re-sends."""
+
+    def __init__(self, today: str, path: Path | None = None, *, persist: bool = True) -> None:
+        self.path = path or config.SENT_PATH
+        self.persist = persist
+        raw = _read(self.path, {})
+        cutoff = _cutoff()
+        # Drop entries older than retention and any pre-v2 shape (which held raw chat ids).
+        self.data: dict[str, Any] = {
+            k: v
+            for k, v in raw.items()
+            if _is_date(k) and k >= cutoff and isinstance(v, dict) and "bot" in v
+        }
+        day = self.data.setdefault(today, {})
+        self.channel = day.setdefault("channel", {"header": None, "ipos": {}, "done": None})
+        self.bot = day.setdefault("bot", {"users": {}, "done": None})
+
+    def save(self) -> None:
+        if self.persist:
+            _write(self.path, self.data)
+
+    # channel
+    @property
+    def header_id(self) -> int | None:
+        return self.channel.get("header")
+
+    def set_header(self, message_id: int) -> None:
+        self.channel["header"] = message_id
+        self.save()
+
+    def channel_sent(self, ipo_id: str) -> bool:
+        return ipo_id in self.channel["ipos"]
+
+    def mark_channel(self, ipo_id: str, message_id: int) -> None:
+        self.channel["ipos"][ipo_id] = message_id
+        self.save()
+
+    # bot
+    def dm_sent(self, chat_id: str | int) -> list[str]:
+        return list(self.bot["users"].get(chat_hash(chat_id), []))
+
+    def mark_dm(self, chat_id: str | int, item: str) -> None:
+        self.bot["users"].setdefault(chat_hash(chat_id), []).append(item)
+        self.save()
+
+    # completion
+    def done(self, phase: str) -> bool:
+        return bool(getattr(self, phase)["done"])
+
+    def mark_done(self, phase: str) -> None:
+        getattr(self, phase)["done"] = config.format_ist()
+        self.save()
 
 
-def channel_key(date: str) -> str:
-    return f"channel:{date}"
-
-
-def channel_already_sent(date: str) -> bool:
-    sent = load_sent()
-    entry = sent.get(channel_key(date))
-    return bool(entry)
-
-
-def brief_already_sent(date: str, chat_id: str | int) -> bool:
-    sent = load_sent()
-    return brief_key(chat_id, date) in sent
-
-
-def alert_already_ran(date: str) -> bool:
-    """True when today's channel post or any brief is already in sent.json."""
-    sent = load_sent()
-    if channel_key(date) in sent:
-        return True
-    suffix = f":{date}"
-    return any(
-        isinstance(k, str) and k.startswith("brief:") and k.endswith(suffix)
-        for k in sent
-    )
-
-
-# Back-compat alias used by older call sites
-def user_already_sent(date: str, chat_id: str | int) -> bool:
-    return brief_already_sent(date, chat_id)
-
-
-def latest_ipos_for_date(date: str) -> list[dict[str, Any]]:
-    """Latest snapshot row per ipo_id for a given IST date — no network."""
-    by_id: dict[str, dict[str, Any]] = {}
-    for row in load_snapshots():
-        if row.get("date") != date:
-            continue
-        iid = row.get("ipo_id")
-        if not iid:
-            continue
-        cur = by_id.get(str(iid))
-        if cur is None or (row.get("ts") or "") > (cur.get("ts") or ""):
-            by_id[str(iid)] = row
-    return list(by_id.values())
-
-
-def mark_channel_sent(date: str, ipo_ids: list[str]) -> None:
-    sent = load_sent()
-    sent[channel_key(date)] = {
-        "ts": config.format_ist(),
-        "ipo_ids": ipo_ids,
-    }
-    save_sent(sent)
-
-
-def mark_brief_sent(
-    date: str,
-    chat_id: str | int,
-    *,
-    ipo_ids: list[str] | None = None,
-    quiet: bool = False,
-) -> None:
-    sent = load_sent()
-    sent[brief_key(chat_id, date)] = {
-        "ts": config.format_ist(),
-        "ipo_ids": ipo_ids or [],
-        "quiet": quiet,
-    }
-    save_sent(sent)
-
-
-# Back-compat alias
-def mark_user_sent(date: str, chat_id: str | int, ipo_ids: list[str]) -> None:
-    mark_brief_sent(date, chat_id, ipo_ids=ipo_ids)
-
-
-def load_users_file() -> dict[str, Any]:
-    data = _read(config.USERS_PATH, {})
-    if not isinstance(data, dict):
-        raise ValueError("users.json must be an object")
-    return data
-
-
-def load_users() -> dict[str, Any]:
-    """Prefer live webhook prefs for alerts; else data/users.json."""
+def _is_date(key: str) -> bool:
     try:
-        from bot import webhook_users
-
-        remote = webhook_users.fetch_users()
-        if remote is not None:
-            try:
-                save_users(remote)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("could not mirror webhook users locally: %s", exc)
-            return remote
-    except Exception as exc:  # noqa: BLE001
-        log.warning("webhook user load skipped: %s", exc)
-
-    return load_users_file()
-
-
-def save_users(data: dict[str, Any]) -> None:
-    _write(config.USERS_PATH, data)
-
-
-def default_prefs() -> dict[str, Any]:
-    return {
-        "board": "main",
-        "min_gmp_main": config.MIN_GMP_MAIN,
-        "min_gmp_sme": config.MIN_GMP_SME,
-        "min_gmp_pct": config.MIN_GMP_MAIN,
-        "min_total_sub": config.MIN_TOTAL_SUB,
-        "include_sme": config.INCLUDE_SME,
-        "awaiting_input": None,
-        "updated": config.format_ist(),
-    }
-
-
-def get_or_create_user(chat_id: str | int) -> dict[str, Any]:
-    key = str(chat_id)
-    # Read path: webhook (if configured) so Preview/alert see live Settings
-    try:
-        from bot import webhook_users
-
-        remote = webhook_users.fetch_users()
-        if remote is not None and key in remote:
-            return remote[key]
-    except Exception:  # noqa: BLE001
-        pass
-
-    users = load_users_file()
-    if key not in users:
-        users[key] = default_prefs()
-        save_users(users)
-    return users[key]
-
-
-def update_user(chat_id: str | int, **fields: Any) -> dict[str, Any]:
-    """Local file update (tests / legacy). Live Settings are owned by the Worker."""
-    users = load_users_file()
-    key = str(chat_id)
-    prefs = users.get(key) or default_prefs()
-    prefs.update(fields)
-    prefs["updated"] = config.format_ist()
-    users[key] = prefs
-    save_users(users)
-    return prefs
+        date.fromisoformat(key)
+    except ValueError:
+        return False
+    return True

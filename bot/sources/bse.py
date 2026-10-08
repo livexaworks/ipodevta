@@ -10,7 +10,7 @@ import requests
 
 from bot import config
 
-# Confirmed against fixtures/bse_live.json and fixtures/bse_catdem_7973.json (2026-09-20)
+# Confirmed against tests/fixtures/bse/ (captured 2026-09-20)
 
 
 class BseError(RuntimeError):

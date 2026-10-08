@@ -18,12 +18,8 @@ def load() -> dict[str, Any]:
     return data
 
 
-def clear_cache() -> None:
-    load.cache_clear()
-
-
 def get(path: str, default: Any = None) -> Any:
-    """Dot-path lookup, e.g. get('buttons.preview')."""
+    """Dot-path lookup, e.g. get('buttons.check')."""
     cur: Any = load()
     for part in path.split("."):
         if not isinstance(cur, dict) or part not in cur:
@@ -33,13 +29,14 @@ def get(path: str, default: Any = None) -> Any:
 
 
 def t(path: str, **kwargs: Any) -> str:
-    """Fetch a string template and format with str.format_map (missing keys stay)."""
+    """Fetch a string template and fill {placeholders}; unknown ones stay as-is."""
     raw = get(path)
     if raw is None:
         raise KeyError(f"copy path not found: {path}")
     text = str(raw)
     if not kwargs:
         return text
+
     class _Map(dict):
         def __missing__(self, key: str) -> str:
             return "{" + key + "}"

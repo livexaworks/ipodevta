@@ -3,135 +3,92 @@
 export default {
   "bot": {
     "name": "IPODevta",
-    "short_description": "IPO fills without the clutter. Clear 👍 / 👎 with GMP and subscription.",
-    "description": "IPODevta removes the clutter from IPO fill decisions.\n\nYou get a simple 👍 or 👎 with GMP and subscription numbers, using filters you set.\n\nTap Feedback anytime to send a note to the team.\n\nInformation only - not investment advice. Read the RHP."
+    "short_description": "Only the IPOs that pass your filters. Name, board, price, GMP and subscription at 2:30 PM.",
+    "description": "IPODevta sends you only the IPOs that pass your filters.\n\nEvery market day at 2:30 PM: one clean message per IPO with name, board, price, GMP and subscription. Nothing passes? One line telling you to stay out.\n\nNo filters wanted? Join the channel for every open IPO at 9:30 AM.\n\nInformation only - not investment advice. Read the RHP."
+  },
+  "commands": {
+    "start": "Open IPODevta",
+    "check": "IPOs passing your filters now",
+    "settings": "Set board, GMP % and subscription",
+    "help": "How it works",
+    "feedback": "Send a note to the team"
   },
   "buttons": {
-    "preview": "Preview GMP",
-    "settings": "Settings",
+    "check": "🔎 Check now",
+    "settings": "⚙️ Settings",
     "help": "Help",
-    "channel": "Channel",
+    "channel": "📢 Channel",
     "feedback": "Feedback",
     "home": "Home",
-    "join_channel": "Join channel",
+    "join_channel": "📢 Join channel",
+    "today_ipos": "📢 Today's IPOs",
+    "filters": "⚙️ Filters",
     "type_pct": "Type %",
     "type_pct_prefixed": "Type {prefix}",
     "board_main": "Mainboard",
     "board_sme": "SME",
     "board_both": "Both",
-    "sub_preset": "Sub {value}x",
-    "filters": "⚙️ Filters",
-    "all_ipos": "📢 All IPOs"
+    "sub_preset": "Sub {value}x"
   },
-  "commands": {
-    "start": "Open IPODevta",
-    "preview": "See issues with your filters",
-    "settings": "Set GMP, subscription, board",
-    "help": "What you get",
-    "feedback": "Send a note to the team"
+  "card": {
+    "closes_today": "🔴 Closes today",
+    "opens_today": "🟢 Opens today",
+    "dates": "📅 Open {open} → Close {close}",
+    "price": "💰 Price {price}",
+    "price_na": "💰 Price not announced",
+    "gmp": "📈 GMP {gmp} ({pct})",
+    "gmp_na": "📈 GMP not available",
+    "sub": "📊 Subscription {sub} ({when})",
+    "sub_na": "📊 Subscription not available yet",
+    "sub_not_started": "📊 Bidding starts today",
+    "when_morning": "till yesterday",
+    "when_live": "live {time}"
   },
-  "emoji": {
-    "title": "📊",
-    "closing": "⏰",
-    "fits": "👍",
-    "wait": "⏳",
-    "skip": "👎",
-    "check": "⚠️",
-    "filters": "⚙️",
-    "channel": "📢"
+  "header": {
+    "title": "📊 <b>IPO Market · {date}</b>",
+    "counts": "{open} open · {closing} closing today",
+    "none": "No IPOs are open today.",
+    "footer": "<i>GMP and subscription as of {time} IST. GMP is unofficial. Not investment advice.</i>"
   },
-  "rule": "────────────",
-  "na": "n/a",
-  "disclaimer": {
-    "dm": "<blockquote expandable>Grey-market premium is unofficial and can move quickly.\nMarket data via IPO Guru API. Information only - not investment advice. Read the RHP.</blockquote>",
-    "help_short": "<i>Grey-market premium is unofficial and can move quickly.\nInformation only - not investment advice. Read the RHP.</i>",
-    "long": "Grey-market premium is unofficial and can move quickly. Data from third-party sources. Information only — not investment advice. Read the RHP."
-  },
-  "footer": {
-    "filters_both": "Filters: Main {main}%+ · SME {sme}%+ · Sub {sub}x+",
-    "filters_one": "Filters: {board} only · GMP {gmp}%+ · Sub {sub}x+",
-    "hidden": " · {count} {board} hidden",
-    "data": "Data {hhmm} IST · GMP is unofficial · Not investment advice",
-    "quiet_data": "Data {hhmm} IST · Not investment advice"
-  },
-  "reasons": {
-    "GMP_BELOW": "GMP {actual}%, needs {required}%",
-    "SUB_BELOW": "Sub {actual}x, needs {required}x",
-    "LOW_CONFIDENCE": "GMP data too thin",
-    "GMP_FALLING": "GMP falling, {from}% → {to}%",
-    "NO_PRIOR_SUB": "verdict tomorrow",
-    "SUB_MISSING": "No sub data. Check BSE before applying.",
-    "GMP_MISSING": "No GMP data. Check before applying.",
-    "BOARD_SME_EXCLUDED": "SME issue, excluded",
-    "BOARD_MAIN_EXCLUDED": "MAIN issue, excluded",
-    "BOARD_EXCLUDED": "board {board} excluded"
-  },
+  "no_match": "🚫 No IPO passed your filters today. Stay out of the IPO market today.",
+  "disclaimer": "Grey-market premium is unofficial and can move quickly. Data from IPO Guru and BSE. Information only - not investment advice. Read the RHP.",
   "labels": {
     "your_filters": "Your filters",
     "mainboard": "Mainboard",
     "sme": "SME",
-    "both_boards": "Mainboard + SME",
+    "board_main_line": "Board       Mainboard",
     "board_sme_line": "Board       SME",
     "board_both_line": "Board       Mainboard + SME",
-    "board_main_line": "Board       Mainboard",
     "gmp_line": "GMP         {value}",
     "main_gmp_line": "Main GMP    {value}",
     "sme_gmp_line": "SME GMP     {value}",
     "sub_line": "Sub         {value}",
-    "none_today": "None today",
-    "matches_header": "👍 Matches your filters",
-    "skipped_header": "👎 Skipped",
-    "closing_today": "Closing today",
-    "ipo_gmp": "IPO GMP",
-    "continued": "continued",
-    "preview": "Preview",
-    "did_not_pass": "did not pass your filters",
-    "subscription_prior": "Subscription (prior close)",
-    "live_book": "Live book",
-    "lot": "Lot",
-    "closes": "Closes",
-    "saved": "Saved",
-    "quick_actions": "Quick actions:",
-    "quick_actions_html": "<b>Quick actions</b>",
     "feedback_admin": "<b>Feedback</b> from <code>{chat_id}</code>"
   },
   "welcome": {
     "title": "<b>IPODevta</b>",
-    "tagline": "<i>IPO fills without the clutter.</i>",
-    "lead": "On closing days you get:",
-    "bullet_verdict": "• A clear 👍 or 👎 for each issue",
-    "bullet_numbers": "• GMP and subscription in one place",
-    "bullet_filters": "• Filters you control",
-    "buttons_hint": "Use the buttons below. No typing needed.",
-    "channel_invite": "Want closing-day GMP with no filters? <a href=\"{channel}\">Join the public channel</a>",
-    "feedback_hint": "Something off? Tap <b>Feedback</b>.",
-    "closing": "<i>Happy filing. All the best for allotments.</i>"
+    "tagline": "<i>Only the IPOs that pass your filters.</i>",
+    "daily": "Every market day at <b>2:30 PM</b> you get one message per IPO that passes your filters: name, board, price, GMP and subscription.",
+    "none": "If nothing passes, you get one line telling you to stay out.",
+    "channel": "Don't want filters? <a href=\"{channel}\">The channel</a> posts every open IPO at <b>9:30 AM</b>.",
+    "buttons_hint": "Use the buttons below. No typing needed."
   },
   "help": {
-    "title": "<b>Daily Brief</b>",
-    "sections": "⏰ Closing today · 👍 Fits · ⏳ Too early · 👎 Skip",
-    "check": "⚠️ Check data — GMP or sub is missing",
-    "hidden": "Hidden boards show as a footer count only",
-    "actions": "⚙️ Filters · 📢 All IPOs channel · 👀 Preview",
-    "feedback": "💬 Feedback sends a note to the team",
-    "open_channel": "<a href=\"{channel}\">Open the public channel</a>",
-    "disclaimer_expandable": true
+    "title": "<b>How IPODevta works</b>",
+    "daily": "• <b>2:30 PM</b> on market days: one message per IPO that passes your filters.",
+    "closing": "• 🔴 marks IPOs closing today. They come first.",
+    "none": "• Nothing passes: one 🚫 message. Stay out that day.",
+    "check": "• 🔎 Check now: the IPOs passing your filters right now.",
+    "settings": "• ⚙️ Settings: board, GMP % and subscription.",
+    "channel": "• <a href=\"{channel}\">📢 Channel</a>: every open IPO at <b>9:30 AM</b>, no filters."
   },
   "settings": {
     "title": "<b>Settings</b>",
-    "hint_sme": "SME percentages are below. Subscription is under that.",
-    "hint_both": "Mainboard percentages come first. SME percentages follow. Subscription is under both.",
-    "hint_main": "Mainboard percentages are below. Subscription is under that.",
-    "tap_hint": "Tap a percentage, or tap <b>Type %</b> and send a number.",
-    "filters_use": "Preview and closing-day notes use these filters.",
-    "channel_note": "The channel still posts one daily list for everyone."
-  },
-  "channel_invite": {
-    "title": "<b>Public channel</b>",
-    "no_filters": "No personal filters here.",
-    "body": "Once a day this channel posts a short GMP and subscription list for the issues in the market. No personal filters. One post, then it stays quiet until the next day.",
-    "join": "<a href=\"{channel}\">Join {handle}</a>",
-    "closing": "Happy filing. All the best for allotments in the companies you care about."
+    "hint_main": "Mainboard GMP % is below, then subscription.",
+    "hint_sme": "SME GMP % is below, then subscription.",
+    "hint_both": "Mainboard GMP % first, then SME, then subscription.",
+    "tap_hint": "Tap a value, or tap <b>Type %</b> and send a number.",
+    "filters_use": "The 2:30 PM messages and Check now use these filters."
   },
   "gmp_prompt": {
     "title_main": "<b>Mainboard GMP</b>",
@@ -142,74 +99,36 @@ export default {
   },
   "feedback": {
     "title": "<b>Feedback</b>",
-    "body": "Send your note in one message.",
-    "forward": "We will forward it to the team.",
+    "body": "Send your note in one message. We will forward it to the team.",
     "cancel": "Type <code>cancel</code> to stop.",
     "cancelled": "Feedback cancelled.",
     "thanks": "Thanks. Your note was sent to the team."
   },
-  "preview": {
-    "note_live": "Open issues scored with your filters.",
-    "note_processed": "Recent issues scored with your filters.",
-    "empty_1": "Nothing to show yet.",
-    "empty_2": "Check again later.",
-    "saved_title": "<b>Saved preview</b>",
-    "saved_age": "<i>Retrieved from cache · about {age} min old</i>",
-    "toast_saved": "Showing saved preview",
-    "in_progress_title": "<b>Preview in progress</b>",
-    "in_progress_body": "Your last request is still running.\nPlease wait about <b>1 minute</b> before tapping again.",
-    "toast_wait": "Please wait ~1 min - preview still running",
-    "toast_fetching": "Fetching fresh preview…",
-    "toast_unavailable": "Preview unavailable",
-    "fetching_title": "<b>Preview GMP</b>",
-    "fetching_body": "Fetching fresh scores with your filters…",
-    "fetching_eta": "<i>Usually under 1 minute.</i>",
-    "fetching_hint": "After it arrives, you can open it again instantly from the saved copy.",
-    "unavailable_body": "Temporarily unavailable.\nTry again in a minute, or wait for the next market scan.",
-    "building": "Building preview…"
+  "check": {
+    "no_data": "No IPO data yet. Updates arrive at 9:30 AM and 2:30 PM on market days.",
+    "stale": "<i>Latest data: {date}, {time}.</i>"
   },
   "toasts": {
-    "home": "Home",
-    "help": "Help",
+    "check": "Checking your filters…",
     "settings": "Settings",
+    "help": "Help",
+    "home": "Home",
     "feedback": "Feedback",
     "invalid_gmp": "Invalid GMP",
-    "invalid_sub": "Invalid sub",
     "unknown": "Unknown action",
-    "send_sme_pct": "Send SME %",
     "send_main_pct": "Send mainboard %",
+    "send_sme_pct": "Send SME %",
     "gmp_saved": "{label} GMP → {value}%",
-    "gmp_set": "{label} GMP set to {value}%",
     "sub_saved": "Min sub → {value}x",
-    "sub_saved_long": "Min subscription set to {value}x",
     "board_main": "Mainboard only",
     "board_sme": "SME only",
     "board_both": "Mainboard + SME"
   },
   "messages": {
     "saved_gmp": "<b>Saved</b>\n{label} GMP {value}%\n\n{prefs}",
-    "saved_plain": "<b>Saved</b>\n\n{prefs}",
-    "use_settings_or_preview": "Use <b>Settings</b> to pick a GMP filter, or tap Preview GMP.",
-    "use_buttons": "Use the buttons below - Preview GMP, Settings, Help, or Channel.",
-    "use_buttons_worker": "Use the buttons below.\nPreview GMP · Settings · Help · Channel · Feedback",
-    "truncated": "…truncated."
+    "use_buttons": "Use the buttons below."
   },
-  "brief": {
-    "title": "{emoji} IPO Brief · {date}",
-    "title_as_of": "{emoji} IPO Brief · {date} (as of {hhmm})",
-    "channel_title": "{emoji} IPOs open · {date}",
-    "channel_subtitle": "GMP · prior-day sub · close day",
-    "closing_header": "{emoji} Closing today ({count})",
-    "closing_empty": "{emoji} Nothing closes today",
-    "fits_header": "{emoji} Fits your filters ({count})",
-    "wait_header": "{emoji} Too early ({count})",
-    "skip_header": "{emoji} Skip ({count})",
-    "quiet_body": "Nothing open on your boards today.",
-    "quiet_hidden_closing": "{count} {board} IPOs close today, hidden by your filters.",
-    "quiet_hidden_open": "{count} {board} IPOs open, hidden by your filters.",
-    "channel_cta": "Your own 👍/👎: @{bot}",
-    "more_skip": "+{count} more in 📢 All IPOs",
-    "more_fits": "+{count} more",
-    "day_1": "day 1"
+  "admin": {
+    "dispatch_failed": "IPODevta: cron {event} dispatch to GitHub failed (HTTP {status}). Check GITHUB_TOKEN / GITHUB_REPO on the Worker."
   }
 };

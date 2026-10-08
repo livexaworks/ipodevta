@@ -1,7 +1,11 @@
-"""IPO Guru normalize + budget helpers (no live network)."""
+"""IPO Guru normalisation and budget (no network)."""
 
-from bot.sources import gmp, ipoguru
+import json
 
+import pytest
+
+from bot import config
+from bot.sources import ipoguru
 
 SAMPLE = {
     "slug": "example-industries-ipo",
@@ -16,53 +20,49 @@ SAMPLE = {
     "price_max": 148,
     "lot_size": 101,
     "subscription_total": "1.25",
-    "gmp": {
-        "price": "35",
-        "percentage": "23.65%",
-        "updated_at": "2026-09-28T05:30:00.000000Z",
-        "updated_at_label": "28 Sep 2026, 11:00 AM IST",
-    },
+    "gmp": {"price": "35", "percentage": "23.65%", "updated_at_label": "28 Sep 2026, 11:00 AM IST"},
     "web_url": "https://www.ipoguru.in/ipo/example-industries-ipo",
 }
 
 
 def test_normalize_mainboard():
     row = ipoguru.normalize_row(SAMPLE)
-    assert row is not None
     assert row["ipo_id"] == "example-industries-ipo"
+    assert row["name"] == "Example Industries"
     assert row["board"] == "MAIN"
     assert row["price_high"] == 148.0
-    assert row["gmp"] == 35.0
-    assert row["gmp_pct"] == 23.65
+    assert (row["gmp"], row["gmp_pct"]) == (35.0, 23.65)
     assert row["sub_total"] == 1.25
-    assert row["confidence"] == "high"
-    assert row["n_sources"] == 1
+    assert row["open_date"] == "2026-09-28"
 
 
-def test_normalize_sme():
-    row = ipoguru.normalize_row({**SAMPLE, "type": "SME", "slug": "sme-co-ipo"})
-    assert row is not None
-    assert row["board"] == "SME"
-
-
-def test_normalize_skips_non_equity():
+def test_normalize_sme_and_non_equity():
+    assert ipoguru.normalize_row({**SAMPLE, "type": "SME"})["board"] == "SME"
     assert ipoguru.normalize_row({**SAMPLE, "type": "Debt"}) is None
 
 
-def test_from_ipoguru_helper():
-    row = ipoguru.normalize_row(SAMPLE)
-    cons = gmp.from_ipoguru(row)
-    assert cons is not None
-    assert cons["confidence"] == "high"
-    assert cons["gmp"] == 35.0
-
-
-def test_gmp_pct_derived_when_percentage_missing():
-    sample = {
-        **SAMPLE,
-        "gmp": {"price": "30", "percentage": None},
-    }
-    row = ipoguru.normalize_row(sample)
-    assert row is not None
-    assert row["gmp"] == 30.0
+def test_gmp_pct_derived_when_missing():
+    row = ipoguru.normalize_row({**SAMPLE, "gmp": {"price": "30", "percentage": None}})
     assert row["gmp_pct"] == round(30 / 148 * 100, 2)
+
+
+@pytest.fixture
+def guru_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(ipoguru, "USAGE_PATH", tmp_path / "usage.json")
+    monkeypatch.setattr(ipoguru, "CACHE_PATH", tmp_path / "cache.json")
+    monkeypatch.setenv("IPOGURU_API_KEY", "k")
+    return tmp_path
+
+
+def test_budget_exhausted_uses_todays_cache_only(guru_paths):
+    today = config.today_ist()
+    ipoguru.USAGE_PATH.write_text(json.dumps({"date": today, "requests": 10, "last_ts": 0}))
+    with pytest.raises(ipoguru.BudgetExceeded):
+        ipoguru.fetch_open_ipos()
+
+    ipoguru.CACHE_PATH.write_text(json.dumps({"date": "2026-10-01", "ipos": [{"ipo_id": "old"}]}))
+    with pytest.raises(ipoguru.BudgetExceeded):
+        ipoguru.fetch_open_ipos()
+
+    ipoguru.CACHE_PATH.write_text(json.dumps({"date": today, "ipos": [{"ipo_id": "fresh"}]}))
+    assert ipoguru.fetch_open_ipos() == [{"ipo_id": "fresh"}]
