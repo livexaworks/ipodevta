@@ -3,7 +3,7 @@
 IPO GMP and subscription on Telegram, one clean message per IPO.
 
 - **Channel [@ipodevta](https://t.me/ipodevta), 9:30 AM IST.** Every open IPO, no filters. For people who don't want to set anything up.
-- **Bot, 2:30 PM IST.** Only the IPOs that pass *your* filters (board, GMP %, subscription). Each card has two buttons: 📢 Today's IPOs (opens today's channel post) and ⚙️ Filters. If nothing passes, you get a single 🚫 message telling you to stay out that day.
+- **Bot, 2:30 PM IST.** Only the IPOs that pass *your* filters (board, GMP %, subscription). Each card has two buttons: 📢 Today's IPOs (opens today's channel post) and ⚙️ Filters. If IPOs are open but none pass, you get a single 🚫 message telling you to stay out that day. If no IPOs are open at all, nobody gets anything: no channel post and no DM.
 
 Both use the same card:
 

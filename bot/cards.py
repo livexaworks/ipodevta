@@ -55,14 +55,12 @@ def render_card(ipo: dict[str, Any], *, today: str, phase: str, as_of: str) -> s
 
 
 def render_header(ipos: list[dict[str, Any]], *, today: str, as_of: str) -> str:
-    lines = [copy.t("header.title", date=fmt.date_long(today))]
-    if ipos:
-        closing = sum(1 for i in ipos if str(i.get("close_date") or "") == today)
-        lines.append(copy.t("header.counts", open=len(ipos), closing=closing))
-    else:
-        lines.append(copy.t("header.none"))
-    lines.append(copy.t("header.footer", time=fmt.time_12h(as_of)))
-    return "\n".join(lines)
+    closing = sum(1 for i in ipos if str(i.get("close_date") or "") == today)
+    return "\n".join([
+        copy.t("header.title", date=fmt.date_long(today)),
+        copy.t("header.counts", open=len(ipos), closing=closing),
+        copy.t("header.footer", time=fmt.time_12h(as_of)),
+    ])
 
 
 def render_no_match() -> str:

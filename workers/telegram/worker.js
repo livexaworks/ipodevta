@@ -339,7 +339,12 @@ async function sendCheck(env, chatId) {
       disable_notification: true,
     });
   }
-  const passing = (market.ipos || []).filter((ipo) => passesFilter(ipo, prefs)).slice(0, MAX_CHECK_CARDS);
+  const open = market.ipos || [];
+  if (!open.length) {
+    await send(env, chatId, t("check.none_open"), { reply_markup: mainKeyboard() });
+    return;
+  }
+  const passing = open.filter((ipo) => passesFilter(ipo, prefs)).slice(0, MAX_CHECK_CARDS);
   if (!passing.length) {
     await send(env, chatId, t("no_match"), { reply_markup: keyboard });
     return;

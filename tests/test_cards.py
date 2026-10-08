@@ -56,7 +56,6 @@ def test_header_counts(market):
     html = cards.render_header(open_now, today=TODAY, as_of="09:30")
     assert html.splitlines()[:2] == ["📊 <b>IPO Market · Thu 8 Oct</b>", "4 open · 1 closing today"]
     assert "9:30 AM IST" in html
-    assert "No IPOs are open today." in cards.render_header([], today=TODAY, as_of="09:30")
 
 
 def test_no_match_and_keyboard():

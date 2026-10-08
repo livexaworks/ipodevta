@@ -73,6 +73,28 @@ def test_no_match_message_once(open_ipos):
     assert again.sent == []
 
 
+def test_empty_market_sends_nothing_anywhere():
+    log = state.SentLog(TODAY)
+    channel = run.DryRunSender()
+    assert run.run_channel([], today=TODAY, as_of="09:30", sent=log, sender=channel, channel="@c").posted == 0
+    strict = {"board": "main", "min_gmp_main": 99}
+    dm = run.DryRunSender()
+    report = run.run_bot([], {"1": {}, "2": strict}, today=TODAY, as_of="14:31", sent=log, sender=dm)
+    assert channel.sent == [] and dm.sent == []
+    assert report.no_match == 0
+    assert report.line().startswith("IPODevta bot: no open IPOs, nothing sent")
+
+
+def test_empty_market_run_completes(monkeypatch, tmp_path):
+    empty = tmp_path / "empty.json"
+    empty.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(worker_api, "fetch_users", lambda: {"1": {}})
+    monkeypatch.setattr(telegram, "send", lambda *a, **k: pytest.fail("nothing to send on an empty day"))
+    assert run.run("bot", fixture=str(empty)) == 0
+    assert run.run("channel", fixture=str(empty), force=True) == 0
+    assert state.SentLog(TODAY).done("bot")
+
+
 def test_blocked_user_does_not_fail_the_run(open_ipos):
     class Blocking(run.DryRunSender):
         def send(self, chat_id, html, **kw):

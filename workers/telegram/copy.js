@@ -4,7 +4,7 @@ export default {
   "bot": {
     "name": "IPODevta",
     "short_description": "Only the IPOs that pass your filters. Name, board, price, GMP and subscription at 2:30 PM.",
-    "description": "IPODevta sends you only the IPOs that pass your filters.\n\nEvery market day at 2:30 PM: one clean message per IPO with name, board, price, GMP and subscription. Nothing passes? One line telling you to stay out.\n\nNo filters wanted? Join the channel for every open IPO at 9:30 AM.\n\nInformation only - not investment advice. Read the RHP."
+    "description": "IPODevta sends you only the IPOs that pass your filters.\n\nEvery market day at 2:30 PM: one clean message per IPO with name, board, price, GMP and subscription. IPOs open but none worth applying? One line telling you to stay out. No IPOs open? No message.\n\nNo filters wanted? Join the channel for every open IPO at 9:30 AM.\n\nInformation only - not investment advice. Read the RHP."
   },
   "commands": {
     "start": "Open IPODevta",
@@ -46,7 +46,6 @@ export default {
   "header": {
     "title": "📊 <b>IPO Market · {date}</b>",
     "counts": "{open} open · {closing} closing today",
-    "none": "No IPOs are open today.",
     "footer": "<i>GMP and subscription as of {time} IST. GMP is unofficial. Not investment advice.</i>"
   },
   "no_match": "🚫 No IPO passed your filters today. Stay out of the IPO market today.",
@@ -68,7 +67,7 @@ export default {
     "title": "<b>IPODevta</b>",
     "tagline": "<i>Only the IPOs that pass your filters.</i>",
     "daily": "Every market day at <b>2:30 PM</b> you get one message per IPO that passes your filters: name, board, price, GMP and subscription.",
-    "none": "If nothing passes, you get one line telling you to stay out.",
+    "none": "If IPOs are open but none pass, you get one line telling you to stay out. If no IPOs are open, you get no message.",
     "channel": "Don't want filters? <a href=\"{channel}\">The channel</a> posts every open IPO at <b>9:30 AM</b>.",
     "buttons_hint": "Use the buttons below. No typing needed."
   },
@@ -76,7 +75,7 @@ export default {
     "title": "<b>How IPODevta works</b>",
     "daily": "• <b>2:30 PM</b> on market days: one message per IPO that passes your filters.",
     "closing": "• 🔴 marks IPOs closing today. They come first.",
-    "none": "• Nothing passes: one 🚫 message. Stay out that day.",
+    "none": "• IPOs open but none pass: one 🚫 message. Stay out that day.\n• No IPOs open: no message.",
     "check": "• 🔎 Check now: the IPOs passing your filters right now.",
     "settings": "• ⚙️ Settings: board, GMP % and subscription.",
     "channel": "• <a href=\"{channel}\">📢 Channel</a>: every open IPO at <b>9:30 AM</b>, no filters."
@@ -105,6 +104,7 @@ export default {
   },
   "check": {
     "no_data": "No IPO data yet. Updates arrive at 9:30 AM and 2:30 PM on market days.",
+    "none_open": "📭 No IPOs are open in the market right now.",
     "stale": "<i>Latest data: {date}, {time}.</i>"
   },
   "toasts": {

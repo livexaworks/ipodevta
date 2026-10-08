@@ -72,7 +72,9 @@ class Report:
     notes: list[str] = field(default_factory=list)
 
     def line(self) -> str:
-        if self.mode == cards.PHASE_CHANNEL:
+        if not self.open_ipos:
+            body = "no open IPOs, nothing sent"
+        elif self.mode == cards.PHASE_CHANNEL:
             body = f"{self.open_ipos} open IPOs, {self.posted} channel posts"
         else:
             body = (
@@ -92,6 +94,8 @@ def run_channel(
     channel: str,
 ) -> Report:
     report = Report(cards.PHASE_CHANNEL, open_ipos=len(ipos))
+    if not ipos:
+        return report
     try:
         if sent.header_id is None:
             msg = sender.send(channel, cards.render_header(ipos, today=today, as_of=as_of))
@@ -121,6 +125,9 @@ def run_bot(
     sender: Sender,
 ) -> Report:
     report = Report(cards.PHASE_BOT, open_ipos=len(ipos), users=len(users))
+    if not ipos:
+        # Empty market: the stay-out message is only for open IPOs that fail the filters.
+        return report
     keyboard = cards.dm_keyboard(sent.header_id)
     rendered = {
         i["ipo_id"]: cards.render_card(i, today=today, phase=cards.PHASE_BOT, as_of=as_of)
