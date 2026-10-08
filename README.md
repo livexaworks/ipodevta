@@ -71,7 +71,3 @@ python -m bot.run channel                                                       
 ```
 
 Edit copy in `shared/copy.json`, then run `python workers/telegram/sync_copy.py` before deploying the Worker.
-
-## Purging old chat ids from git history
-
-Before October 2026 the repo committed `data/users.json` and raw chat ids in `data/sent.json`. They are gone from the working tree, but still in history. To remove them, rewrite history with [git-filter-repo](https://github.com/newren/git-filter-repo) (`git filter-repo --path data/users.json --path data/sent.json --invert-paths`) and force-push. This rewrites every commit, so coordinate with anyone who has a clone.
