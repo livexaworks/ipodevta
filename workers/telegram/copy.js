@@ -19,7 +19,6 @@ export default {
     "help": "Help",
     "channel": "📢 Channel",
     "feedback": "Feedback",
-    "home": "Home",
     "join_channel": "📢 Join channel",
     "today_ipos": "📢 Today's IPOs",
     "filters": "⚙️ Filters",

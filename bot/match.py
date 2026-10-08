@@ -107,8 +107,6 @@ def attach_bse_subscription(
             continue
         claimed.add(cid)
         g["ipo_no"] = bse.get("ipo_no")
-        g["bse_name"] = bse.get("name")
-        g["bse_match_score"] = score
         # Exchange book wins for category totals when present.
         for key in ("sub_qib", "sub_nii", "sub_retail", "sub_total"):
             val = bse.get(key)

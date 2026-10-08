@@ -128,13 +128,10 @@ def parse_live(payload: Any) -> list[dict[str, Any]]:
         out.append(
             {
                 "ipo_no": str(ipo_no),
-                "scrip_cd": row.get("Scrip_cd"),
                 "name": str(name).strip(),
                 "board": board,
                 "price_high": parse_price_high(row.get("Price_Band")),
                 "close_date": parse_close_date(row.get("End_Dt")),
-                "lot_size": None,  # not present on this endpoint
-                "raw": row,
             }
         )
     if not out:

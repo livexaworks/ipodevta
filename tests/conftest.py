@@ -21,7 +21,6 @@ def market() -> list[dict]:
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "SNAPSHOTS_PATH", tmp_path / "snapshots.json")
     monkeypatch.setattr(config, "SENT_PATH", tmp_path / "sent.json")
     monkeypatch.setattr(config, "today_ist", lambda: TODAY)
     monkeypatch.setattr(config, "now_ist", lambda: datetime.fromisoformat(f"{TODAY}T14:31:00+05:30"))

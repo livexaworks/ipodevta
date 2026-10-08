@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from bot import cards, config, filters, state, telegram, worker_api
-from bot.collect import CollectError, Collected, collect, is_open_on, order, snapshot_rows
+from bot.collect import CollectError, Collected, collect, is_open_on, order
 from bot.sources import ipoguru
 
 log = logging.getLogger(__name__)
@@ -220,8 +220,6 @@ def run(
             telegram.admin(f"IPODevta {mode} aborted, nothing sent: {exc}")
         return 1
     ipos = collected.ipos
-    if not dry_run and not fixture:
-        state.append_snapshots(snapshot_rows(ipos, date=today, ts=config.format_ist(), phase=mode))
 
     sender: Sender = DryRunSender() if dry_run else LiveSender()
 
@@ -262,6 +260,8 @@ def run(
         sent.mark_done(mode)
 
     lines = [report.line(), *collected.warnings, *report.notes]
+    if not config.holidays_cover(today[:4]):
+        lines.append(f"data/holidays.json has no {today[:4]} NSE holidays: add them or runs go out on holidays")
     if not fixture:
         lines.append(f"IPO Guru calls left today: {ipoguru.usage_remaining()}")
     summary = "\n".join(lines)

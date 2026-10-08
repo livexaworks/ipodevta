@@ -127,6 +127,14 @@ def test_holiday_skips(monkeypatch):
     assert run.run("channel", fixture=FIXTURE) == 0
 
 
+def test_admin_warned_when_holiday_year_missing(monkeypatch):
+    monkeypatch.setattr(config, "now_ist", lambda: datetime.fromisoformat("2027-01-04T09:30:00+05:30"))
+    alerts = []
+    monkeypatch.setattr(telegram, "admin", alerts.append)
+    assert run.run("channel", fixture=FIXTURE) == 0
+    assert "no 2027 NSE holidays" in alerts[-1]
+
+
 @pytest.fixture(autouse=True)
 def live_sender_is_dry(monkeypatch):
     """Non-dry run() calls use LiveSender; route it to a fake so nothing leaves the machine."""

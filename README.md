@@ -16,7 +16,7 @@ Mainboard · 🔴 Closes today
 📊 Subscription 2.4x (live 2:30 PM)
 ```
 
-Runs only on NSE trading days (`data/holidays.json`). Information only, not investment advice. GMP is unofficial grey-market data.
+Runs only on NSE trading days (`data/holidays.json`; add each year's dates when NSE publishes them in December, and the admin summary warns if the current year is missing). Information only, not investment advice. GMP is unofficial grey-market data.
 
 ---
 
@@ -49,7 +49,7 @@ bot/
   filters.py      board / GMP % / subscription pass-fail (mirrors worker.js)
   cards.py        the one IPO card, channel header, no-match message, DM buttons
   telegram.py     paced sends (3.2 s per channel post), 429 retries, admin alerts
-  state.py        snapshots + per-message sent log (14-day retention)
+  state.py        per-message sent log (14-day retention)
   worker_api.py   read users from / push market cards to the Worker
   set_webhook.py  one-time webhook + bot profile setup
   sources/        ipoguru.py, bse.py
@@ -62,7 +62,7 @@ workers/telegram/ Cloudflare Worker (webhook, Check now, crons)
 1. Copy `.env.example` to `.env` and fill it in.
 2. Add the same values as GitHub Actions secrets: `TELEGRAM_TOKEN`, `CHANNEL_ID`, `ADMIN_CHAT_ID`, `WEBHOOK_BASE_URL`, `EXPORT_SECRET`, `IPOGURU_API_KEY`.
 3. Deploy the Worker: see [workers/telegram/README.md](workers/telegram/README.md).
-4. `pip install -r requirements.txt && python -m pytest`
+4. `pip install -r requirements-dev.txt && python -m pytest` (CI runs the same on every push)
 
 ```bash
 python -m bot.run channel --dry-run --force --fixture tests/fixtures/market.json   # offline preview

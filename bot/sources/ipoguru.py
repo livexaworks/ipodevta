@@ -20,6 +20,7 @@ from bot import config
 
 log = logging.getLogger(__name__)
 
+BASE_URL = "https://www.ipoguru.in/api/v2"
 USAGE_PATH = config.DATA_DIR / "ipoguru_usage.json"
 CACHE_PATH = config.DATA_DIR / "ipoguru_cache.json"
 FREE_PLAN_DAILY = 10
@@ -35,10 +36,6 @@ class BudgetExceeded(IpoGuruError):
 
 def api_key() -> str:
     return config.env("IPOGURU_API_KEY")
-
-
-def base_url() -> str:
-    return (config.env("IPOGURU_BASE_URL") or "https://www.ipoguru.in/api/v2").rstrip("/")
 
 
 def max_requests_per_day() -> int:
@@ -98,13 +95,8 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any] | None:
         "close_date": row.get("close_date"),
         "gmp": gmp_val,
         "gmp_pct": gmp_pct,
-        "gmp_updated_label": gmp_block.get("updated_at_label"),
         "sub_total": _parse_number(row.get("subscription_total")),
-        "sub_qib": None,
-        "sub_nii": None,
-        "sub_retail": None,
         "sub_source": "ipoguru",
-        "web_url": row.get("web_url"),
     }
 
 
@@ -171,7 +163,7 @@ def _get(path: str, params: dict[str, Any]) -> dict[str, Any]:
 
     log.info("IPO Guru GET %s %s (used %d/%d today)", path, params, u["requests"], max_requests_per_day())
     resp = requests.get(
-        f"{base_url()}{path}",
+        f"{BASE_URL}{path}",
         headers={"X-API-KEY": key, "Accept": "application/json", "User-Agent": config.USER_AGENT},
         params=params,
         timeout=30,

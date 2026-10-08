@@ -68,9 +68,3 @@ def collect(today: str) -> Collected:
     out.ipos = order(ipos)
     log.info("Collected %d open IPOs (%d with BSE subscription)", len(ipos), out.bse_matched)
     return out
-
-
-def snapshot_rows(ipos: list[dict[str, Any]], *, date: str, ts: str, phase: str) -> list[dict[str, Any]]:
-    keys = ("ipo_id", "name", "board", "price_high", "open_date", "close_date", "gmp", "gmp_pct",
-            "sub_total", "sub_qib", "sub_nii", "sub_retail", "sub_source")
-    return [{"date": date, "ts": ts, "phase": phase, **{k: i.get(k) for k in keys}} for i in ipos]

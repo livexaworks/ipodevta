@@ -1,4 +1,4 @@
-"""data/*.json state: snapshots and the per-message sent log.
+"""data/sent.json: the per-message sent log.
 
 The repo is public, so the sent log never stores raw Telegram chat ids: users are
 keyed by an HMAC of the chat id using the EXPORT_SECRET Actions secret.
@@ -35,18 +35,6 @@ def _write(path: Path, data: Any) -> None:
 
 def _cutoff() -> str:
     return (date.fromisoformat(config.today_ist()) - timedelta(days=config.RETENTION_DAYS)).isoformat()
-
-
-# --- snapshots -------------------------------------------------------------
-
-
-def append_snapshots(rows: list[dict[str, Any]]) -> None:
-    cutoff = _cutoff()
-    kept = [r for r in _read(config.SNAPSHOTS_PATH, []) if str(r.get("date") or "") >= cutoff]
-    _write(config.SNAPSHOTS_PATH, kept + rows)
-
-
-# --- sent log --------------------------------------------------------------
 
 
 def chat_hash(chat_id: str | int) -> str:

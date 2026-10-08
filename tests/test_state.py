@@ -41,10 +41,3 @@ def test_dry_run_log_never_writes():
     log = state.SentLog(TODAY, persist=False)
     log.set_header(1)
     assert not config.SENT_PATH.exists()
-
-
-def test_snapshots_keep_14_days():
-    config.SNAPSHOTS_PATH.write_text(json.dumps([{"date": "2026-09-01"}, {"date": "2026-10-01"}]), encoding="utf-8")
-    state.append_snapshots([{"date": TODAY}])
-    dates = [r["date"] for r in json.loads(config.SNAPSHOTS_PATH.read_text(encoding="utf-8"))]
-    assert dates == ["2026-10-01", TODAY]

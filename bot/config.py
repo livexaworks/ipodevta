@@ -9,7 +9,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-SNAPSHOTS_PATH = DATA_DIR / "snapshots.json"
 SENT_PATH = DATA_DIR / "sent.json"
 HOLIDAYS_PATH = DATA_DIR / "holidays.json"
 
@@ -125,6 +124,10 @@ def holidays() -> set[str]:
         return set()
     data = json.loads(HOLIDAYS_PATH.read_text(encoding="utf-8"))
     return {str(d) for d in data.get("dates") or []}
+
+
+def holidays_cover(year: str) -> bool:
+    return any(d.startswith(f"{year}-") for d in holidays())
 
 
 def is_market_day(date_iso: str) -> bool:
