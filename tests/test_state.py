@@ -28,7 +28,7 @@ def test_chat_hash_depends_on_secret(monkeypatch):
 def test_prunes_old_and_legacy_entries():
     config.SENT_PATH.write_text(json.dumps({
         "2026-09-01": {"channel": {}, "bot": {}},
-        "2026-10-07": {"channel": {"ipo_ids": []}, "users": {"REDACTED": {}}},
+        "2026-10-07": {"channel": {"ipo_ids": []}, "users": {"123456789": {}}},
         "brief:1:2026-10-07": {"ts": "x"},
         "2026-10-06": {"channel": {"header": 1, "ipos": {}, "done": "x"}, "bot": {"users": {}, "done": "x"}},
     }), encoding="utf-8")
