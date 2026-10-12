@@ -1,6 +1,31 @@
 {
-  "fetched_at": "2026-10-12T14:32:43+05:30",
-  "date": "2026-10-12",
-  "count": 0,
-  "ipos": []
+  "fetched_at": "2026-10-13T00:37:24+05:30",
+  "date": "2026-10-13",
+  "count": 2,
+  "ipos": [
+    {
+      "ipo_id": "hd-fire-protect-ipo",
+      "name": "HD Fire Protect",
+      "board": "MAIN",
+      "price_high": 271.0,
+      "open_date": "2026-10-13",
+      "close_date": "2026-10-15",
+      "gmp": 86.0,
+      "gmp_pct": 31.73,
+      "sub_total": null,
+      "sub_source": "ipoguru"
+    },
+    {
+      "ipo_id": "vaibhav-vyapaar-sme-ipo",
+      "name": "Vaibhav Vyapaar",
+      "board": "SME",
+      "price_high": 54.0,
+      "open_date": "2026-10-13",
+      "close_date": "2026-10-15",
+      "gmp": 0.0,
+      "gmp_pct": 0.0,
+      "sub_total": null,
+      "sub_source": "ipoguru"
+    }
+  ]
 }
