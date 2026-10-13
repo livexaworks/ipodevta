@@ -42,9 +42,12 @@
   },
   "2026-10-13": {
     "channel": {
-      "header": null,
-      "ipos": {},
-      "done": null
+      "header": 11,
+      "ipos": {
+        "hd-fire-protect-ipo": 12,
+        "vaibhav-vyapaar-sme-ipo": 13
+      },
+      "done": "2026-10-13T09:32:14+05:30"
     },
     "bot": {
       "users": {
