@@ -72,5 +72,21 @@
       },
       "done": "2026-10-13T00:37:29+05:30"
     }
+  },
+  "2026-10-14": {
+    "channel": {
+      "header": 14,
+      "ipos": {
+        "hd-fire-protect-ipo": 15,
+        "vaibhav-vyapaar-sme-ipo": 16,
+        "fusion-cx-ipo": 17,
+        "ravita-engineering-services-sme-ipo": 18
+      },
+      "done": "2026-10-14T09:32:26+05:30"
+    },
+    "bot": {
+      "users": {},
+      "done": null
+    }
   }
 }

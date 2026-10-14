@@ -1,8 +1,32 @@
 {
-  "fetched_at": "2026-10-13T09:32:06+05:30",
-  "date": "2026-10-13",
-  "count": 2,
+  "fetched_at": "2026-10-14T09:32:12+05:30",
+  "date": "2026-10-14",
+  "count": 4,
   "ipos": [
+    {
+      "ipo_id": "fusion-cx-ipo",
+      "name": "Fusion CX",
+      "board": "MAIN",
+      "price_high": 289.0,
+      "open_date": "2026-10-14",
+      "close_date": "2026-10-16",
+      "gmp": 33.5,
+      "gmp_pct": 11.59,
+      "sub_total": 0.0,
+      "sub_source": "ipoguru"
+    },
+    {
+      "ipo_id": "ravita-engineering-services-sme-ipo",
+      "name": "Ravita Engineering Services",
+      "board": "SME",
+      "price_high": 112.0,
+      "open_date": "2026-10-14",
+      "close_date": "2026-10-16",
+      "gmp": 2.0,
+      "gmp_pct": 1.79,
+      "sub_total": 0.0,
+      "sub_source": "ipoguru"
+    },
     {
       "ipo_id": "hd-fire-protect-ipo",
       "name": "HD Fire Protect",
@@ -10,9 +34,9 @@
       "price_high": 271.0,
       "open_date": "2026-10-13",
       "close_date": "2026-10-15",
-      "gmp": 86.0,
-      "gmp_pct": 31.73,
-      "sub_total": 0.0,
+      "gmp": 91.0,
+      "gmp_pct": 33.58,
+      "sub_total": 4.63,
       "sub_source": "ipoguru"
     },
     {
@@ -24,7 +48,7 @@
       "close_date": "2026-10-15",
       "gmp": 0.0,
       "gmp_pct": 0.0,
-      "sub_total": 0.0,
+      "sub_total": 0.17,
       "sub_source": "ipoguru"
     }
   ]
