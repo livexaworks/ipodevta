@@ -85,8 +85,27 @@
       "done": "2026-10-14T09:32:26+05:30"
     },
     "bot": {
-      "users": {},
-      "done": null
+      "users": {
+        "491a1da6e72d48ad": [
+          "hd-fire-protect-ipo"
+        ],
+        "44ad80924ef69f0d": [
+          "hd-fire-protect-ipo"
+        ],
+        "5b60f13bfffe295a": [
+          "hd-fire-protect-ipo"
+        ],
+        "682a8cce298c069e": [
+          "hd-fire-protect-ipo"
+        ],
+        "871119429dff2d9e": [
+          "hd-fire-protect-ipo"
+        ],
+        "2303268965e830eb": [
+          "hd-fire-protect-ipo"
+        ]
+      },
+      "done": "2026-10-14T14:31:32+05:30"
     }
   }
 }
