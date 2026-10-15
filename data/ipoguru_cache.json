@@ -1,8 +1,68 @@
 {
-  "fetched_at": "2026-10-14T14:31:26+05:30",
-  "date": "2026-10-14",
-  "count": 4,
+  "fetched_at": "2026-10-15T09:31:24+05:30",
+  "date": "2026-10-15",
+  "count": 9,
   "ipos": [
+    {
+      "ipo_id": "zetwerk-manufacturing-business-ipo",
+      "name": "Zetwerk Manufacturing Business",
+      "board": "MAIN",
+      "price_high": 151.0,
+      "open_date": "2026-10-15",
+      "close_date": "2026-10-19",
+      "gmp": 22.0,
+      "gmp_pct": 14.57,
+      "sub_total": null,
+      "sub_source": "ipoguru"
+    },
+    {
+      "ipo_id": "sahajanand-medical-technologies-ipo",
+      "name": "Sahajanand Medical Technologies",
+      "board": "MAIN",
+      "price_high": 344.0,
+      "open_date": "2026-10-15",
+      "close_date": "2026-10-19",
+      "gmp": 41.0,
+      "gmp_pct": 11.92,
+      "sub_total": 0.0,
+      "sub_source": "ipoguru"
+    },
+    {
+      "ipo_id": "bonfiglioli-transmissions-ipo",
+      "name": "Bonfiglioli Transmissions",
+      "board": "MAIN",
+      "price_high": 586.0,
+      "open_date": "2026-10-15",
+      "close_date": "2026-10-19",
+      "gmp": 178.0,
+      "gmp_pct": 30.38,
+      "sub_total": 0.0,
+      "sub_source": "ipoguru"
+    },
+    {
+      "ipo_id": "tonbo-imaging-india-ipo",
+      "name": "Tonbo Imaging India",
+      "board": "MAIN",
+      "price_high": 700.0,
+      "open_date": "2026-10-15",
+      "close_date": "2026-10-19",
+      "gmp": 500.0,
+      "gmp_pct": 71.43,
+      "sub_total": 0.0,
+      "sub_source": "ipoguru"
+    },
+    {
+      "ipo_id": "shellz-india-sme-ipo",
+      "name": "Shellz India",
+      "board": "SME",
+      "price_high": 179.0,
+      "open_date": "2026-10-15",
+      "close_date": "2026-10-19",
+      "gmp": 0.0,
+      "gmp_pct": 0.0,
+      "sub_total": 0.0,
+      "sub_source": "ipoguru"
+    },
     {
       "ipo_id": "fusion-cx-ipo",
       "name": "Fusion CX",
@@ -10,9 +70,9 @@
       "price_high": 289.0,
       "open_date": "2026-10-14",
       "close_date": "2026-10-16",
-      "gmp": 36.5,
-      "gmp_pct": 12.63,
-      "sub_total": 0.28,
+      "gmp": 33.0,
+      "gmp_pct": 11.42,
+      "sub_total": 0.41,
       "sub_source": "ipoguru"
     },
     {
@@ -24,7 +84,7 @@
       "close_date": "2026-10-16",
       "gmp": 7.0,
       "gmp_pct": 6.25,
-      "sub_total": 0.0,
+      "sub_total": 1.05,
       "sub_source": "ipoguru"
     },
     {
@@ -34,9 +94,9 @@
       "price_high": 271.0,
       "open_date": "2026-10-13",
       "close_date": "2026-10-15",
-      "gmp": 91.0,
-      "gmp_pct": 33.58,
-      "sub_total": 12.8,
+      "gmp": 89.0,
+      "gmp_pct": 32.84,
+      "sub_total": 16.56,
       "sub_source": "ipoguru"
     },
     {
@@ -48,7 +108,7 @@
       "close_date": "2026-10-15",
       "gmp": 0.0,
       "gmp_pct": 0.0,
-      "sub_total": 0.26,
+      "sub_total": 0.43,
       "sub_source": "ipoguru"
     }
   ]

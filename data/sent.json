@@ -107,5 +107,26 @@
       },
       "done": "2026-10-14T14:31:32+05:30"
     }
+  },
+  "2026-10-15": {
+    "channel": {
+      "header": 19,
+      "ipos": {
+        "hd-fire-protect-ipo": 20,
+        "vaibhav-vyapaar-sme-ipo": 21,
+        "fusion-cx-ipo": 22,
+        "ravita-engineering-services-sme-ipo": 23,
+        "tonbo-imaging-india-ipo": 24,
+        "bonfiglioli-transmissions-ipo": 25,
+        "zetwerk-manufacturing-business-ipo": 26,
+        "sahajanand-medical-technologies-ipo": 27,
+        "shellz-india-sme-ipo": 28
+      },
+      "done": "2026-10-15T09:31:55+05:30"
+    },
+    "bot": {
+      "users": {},
+      "done": null
+    }
   }
 }
