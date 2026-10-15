@@ -17,28 +17,29 @@ def open_ipos(market):
 def test_channel_posts_header_then_one_card_per_ipo(open_ipos):
     sender = run.DryRunSender()
     report = run.run_channel(
-        open_ipos, today=TODAY, as_of="09:30", sent=state.SentLog(TODAY), sender=sender, channel="@ipodevta"
+        open_ipos, today=TODAY, as_of="10:00", sent=state.SentLog(TODAY), sender=sender, channel="@ipodevta"
     )
     texts = [m["text"] for m in sender.sent]
     assert len(texts) == 1 + len(open_ipos) == report.posted
     assert texts[0].startswith("📊 <b>IPO Market")
     assert texts[1].startswith("<b>Vishal Nirmiti</b>")  # closing today leads
     assert all(m["reply_markup"] is None for m in sender.sent)  # channel cards carry no buttons
-    assert all(t.count("<b>") == 1 for t in texts[1:])  # one IPO per message
+    assert all(t.endswith("@ipodevta</a>") for t in texts)  # forward attribution on every post
+    assert len({t.splitlines()[0] for t in texts[1:]}) == len(open_ipos)  # one IPO name per message
 
 
 def test_channel_rerun_sends_nothing_twice(open_ipos):
     log = state.SentLog(TODAY)
-    run.run_channel(open_ipos, today=TODAY, as_of="09:30", sent=log, sender=run.DryRunSender(), channel="@c")
+    run.run_channel(open_ipos, today=TODAY, as_of="10:00", sent=log, sender=run.DryRunSender(), channel="@c")
     again = run.DryRunSender()
-    run.run_channel(open_ipos, today=TODAY, as_of="09:30", sent=state.SentLog(TODAY), sender=again, channel="@c")
+    run.run_channel(open_ipos, today=TODAY, as_of="10:00", sent=state.SentLog(TODAY), sender=again, channel="@c")
     assert again.sent == []
 
 
 def test_bot_sends_only_passing_cards_each_with_buttons(open_ipos):
     log = state.SentLog(TODAY)
     log.set_header(77)
-    users = {"111": {"board": "both", "min_gmp_main": 30, "min_gmp_sme": 40, "min_total_sub": 1}}
+    users = {"111": {"board": "both", "min_gmp_main": 30, "min_gmp_sme": 90}}
     sender = run.DryRunSender()
     report = run.run_bot(open_ipos, users, today=TODAY, as_of="14:31", sent=log, sender=sender)
 
@@ -52,11 +53,11 @@ def test_bot_sends_only_passing_cards_each_with_buttons(open_ipos):
 
 
 def test_only_first_card_makes_a_sound(open_ipos):
-    lenient = {"board": "both", "min_gmp_main": 0, "min_gmp_sme": 0, "min_total_sub": 0}
+    lenient = {"board": "both", "min_gmp_main": 0, "min_gmp_sme": 0}
     sender = run.DryRunSender()
     run.run_bot(open_ipos, {"1": lenient}, today=TODAY, as_of="14:31", sent=state.SentLog(TODAY), sender=sender)
-    assert len(sender.sent) == 2
-    assert [m["silent"] for m in sender.sent] == [False, True]
+    assert len(sender.sent) == 3
+    assert [m["silent"] for m in sender.sent] == [False, True, True]
 
 
 def test_no_match_message_once(open_ipos):
@@ -76,7 +77,7 @@ def test_no_match_message_once(open_ipos):
 def test_empty_market_sends_nothing_anywhere():
     log = state.SentLog(TODAY)
     channel = run.DryRunSender()
-    assert run.run_channel([], today=TODAY, as_of="09:30", sent=log, sender=channel, channel="@c").posted == 0
+    assert run.run_channel([], today=TODAY, as_of="10:00", sent=log, sender=channel, channel="@c").posted == 0
     strict = {"board": "main", "min_gmp_main": 99}
     dm = run.DryRunSender()
     report = run.run_bot([], {"1": {}, "2": strict}, today=TODAY, as_of="14:31", sent=log, sender=dm)
@@ -106,12 +107,12 @@ def test_blocked_user_does_not_fail_the_run(open_ipos):
 
 def test_card_text_identical_across_channel_dm_and_worker_payload(open_ipos):
     channel = run.DryRunSender()
-    run.run_channel(open_ipos, today=TODAY, as_of="09:30", sent=state.SentLog(TODAY), sender=channel, channel="@c")
-    payload = run.market_payload(open_ipos, today=TODAY, as_of="09:30", phase="channel", header_id=1)
+    run.run_channel(open_ipos, today=TODAY, as_of="10:00", sent=state.SentLog(TODAY), sender=channel, channel="@c")
+    payload = run.market_payload(open_ipos, today=TODAY, as_of="10:00", phase="channel", header_id=1)
     assert [m["text"] for m in channel.sent[1:]] == [i["card"] for i in payload["ipos"]]
 
     dm = run.DryRunSender()
-    lenient = {"board": "both", "min_gmp_main": 0, "min_gmp_sme": 0, "min_total_sub": 0}
+    lenient = {"board": "both", "min_gmp_main": 0, "min_gmp_sme": 0}
     run.run_bot(open_ipos, {"1": lenient}, today=TODAY, as_of="14:31", sent=state.SentLog("2026-10-08"), sender=dm)
     bot_payload = run.market_payload(open_ipos, today=TODAY, as_of="14:31", phase="bot", header_id=1)
     cards_by_id = {i["ipo_id"]: i["card"] for i in bot_payload["ipos"]}

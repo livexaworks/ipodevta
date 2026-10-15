@@ -6,7 +6,7 @@ SME = {"board": "SME", "gmp_pct": 55.0, "sub_total": 5.0}
 
 def test_defaults_mainboard_only():
     p = filters.normalize({})
-    assert p == {"board": "main", "min_gmp_main": 34.0, "min_gmp_sme": 48.0, "min_total_sub": 1.0}
+    assert p == {"board": "main", "min_gmp_main": 24.0, "min_gmp_sme": 48.0}
     assert filters.passes(MAIN, {})
     assert not filters.passes(SME, {})
 
@@ -21,14 +21,14 @@ def test_sme_only_hides_mainboard():
     assert not filters.passes(MAIN, {"board": "sme"})
 
 
-def test_subscription_bar():
-    assert not filters.passes(MAIN, {"min_total_sub": 2.5})
-    assert filters.passes(MAIN, {"min_total_sub": 2})
+def test_subscription_ignored():
+    assert filters.passes(MAIN, {})
+    assert filters.passes({**MAIN, "sub_total": None}, {})
+    assert filters.passes({**MAIN, "sub_total": 0}, {"min_total_sub": 99})
 
 
-def test_missing_data_fails():
+def test_missing_gmp_or_board_fails():
     assert not filters.passes({**MAIN, "gmp_pct": None}, {})
-    assert not filters.passes({**MAIN, "sub_total": None}, {})
     assert not filters.passes({**MAIN, "board": None}, {})
 
 
@@ -38,4 +38,5 @@ def test_legacy_prefs_still_read():
     assert p["board"] == "both"
     assert p["min_gmp_main"] == 24
     assert p["min_gmp_sme"] == 24
+    assert "min_total_sub" not in p
     assert filters.normalize({"min_gmp_pct": 24, "board": "main"})["min_gmp_sme"] == 48

@@ -3,7 +3,7 @@
  *
  * - Webhook: Start, Check now, Settings, Channel, Help, Feedback (instant replies).
  * - Check now: filters the latest cards that GitHub Actions pushed to KV (POST /market).
- * - Cron: 9:30 IST dispatches the `channel` run, 14:30 IST dispatches the `bot` run.
+ * - Cron: 10:00 IST dispatches the `channel` run, 11:00 IST dispatches the `bot` run.
  *
  * User-facing strings come from shared/copy.json (synced to ./copy.js).
  * KV binding: PREFS. Secrets: TELEGRAM_TOKEN, CHANNEL_ID, ADMIN_CHAT_ID,
@@ -12,12 +12,11 @@
 
 import COPY from "./copy.js";
 
-const DEFAULTS = { board: "main", min_gmp_main: 34, min_gmp_sme: 48, min_total_sub: 1 };
+const DEFAULTS = { board: "main", min_gmp_main: 24, min_gmp_sme: 48 };
 const MAIN_PRESETS = [24, 30, 34, 40, 50];
 const SME_PRESETS = [40, 45, 48, 55, 60];
-const SUB_PRESETS = [1, 2, 5];
 const MAX_CHECK_CARDS = 20;
-const CRON_EVENTS = { "0 4 * * 1-5": "channel", "0 9 * * 1-5": "bot" };
+const CRON_EVENTS = { "30 4 * * 1-5": "channel", "30 5 * * 1-5": "bot" };
 
 // ---------------------------------------------------------------- copy
 
@@ -82,7 +81,6 @@ function normalizePrefs(p) {
     board,
     min_gmp_main: num(p.min_gmp_main ?? legacy, DEFAULTS.min_gmp_main),
     min_gmp_sme: num(p.min_gmp_sme ?? smeLegacy, DEFAULTS.min_gmp_sme),
-    min_total_sub: num(p.min_total_sub, DEFAULTS.min_total_sub),
   };
 }
 
@@ -98,8 +96,8 @@ function passesFilter(ipo, prefs) {
   } else {
     return false;
   }
-  if (ipo.gmp_pct == null || ipo.sub_total == null) return false;
-  return Number(ipo.gmp_pct) >= bar && Number(ipo.sub_total) >= p.min_total_sub;
+  if (ipo.gmp_pct == null) return false;
+  return Number(ipo.gmp_pct) >= bar;
 }
 
 function parsePct(raw) {
@@ -113,19 +111,17 @@ const fmtNum = (n) => String(Number(n));
 // ---------------------------------------------------------------- text
 
 function prefsSummary(p) {
-  const sub = t("labels.sub_line", { value: `${fmtNum(p.min_total_sub)}x` });
   if (p.board === "sme") {
-    return [t("labels.board_sme_line"), t("labels.gmp_line", { value: `${fmtNum(p.min_gmp_sme)}%` }), sub].join("\n");
+    return [t("labels.board_sme_line"), t("labels.gmp_line", { value: `${fmtNum(p.min_gmp_sme)}%` })].join("\n");
   }
   if (p.board === "both") {
     return [
       t("labels.board_both_line"),
       t("labels.main_gmp_line", { value: `${fmtNum(p.min_gmp_main)}%` }),
       t("labels.sme_gmp_line", { value: `${fmtNum(p.min_gmp_sme)}%` }),
-      sub,
     ].join("\n");
   }
-  return [t("labels.board_main_line"), t("labels.gmp_line", { value: `${fmtNum(p.min_gmp_main)}%` }), sub].join("\n");
+  return [t("labels.board_main_line"), t("labels.gmp_line", { value: `${fmtNum(p.min_gmp_main)}%` })].join("\n");
 }
 
 function prefsBlock(p) {
@@ -175,7 +171,7 @@ function gmpPrompt(which) {
   return [
     which === "sme" ? t("gmp_prompt.title_sme") : t("gmp_prompt.title_main"),
     "",
-    t("gmp_prompt.body", { example: which === "sme" ? "48" : "34" }),
+    t("gmp_prompt.body", { example: which === "sme" ? "48" : "24" }),
     t("gmp_prompt.cancel"),
   ].join("\n");
 }
@@ -227,12 +223,6 @@ function settingsInline(p) {
   const rows = [];
   if (p.board !== "sme") rows.push(...pctRows(p.min_gmp_main, MAIN_PRESETS, "main", both ? "M " : ""));
   if (p.board !== "main") rows.push(...pctRows(p.min_gmp_sme, SME_PRESETS, "sme", both ? "S " : ""));
-  rows.push(
-    SUB_PRESETS.map((v) => ({
-      text: mark(nearly(p.min_total_sub, v), t("buttons.sub_preset", { value: String(v) })),
-      callback_data: `sub:${v}`,
-    }))
-  );
   rows.push([
     { text: mark(p.board === "main", btn("board_main")), callback_data: "board:main" },
     { text: mark(p.board === "sme", btn("board_sme")), callback_data: "board:sme" },
@@ -489,15 +479,6 @@ async function handleCallback(env, cb) {
     await savePrefs(env, chatId, prefs);
     await env.PREFS.delete(`gmp:await:${chatId}`);
     await answer(t("toasts.gmp_saved", { label: a === "sme" ? t("labels.sme") : t("labels.mainboard"), value: String(val) }));
-    return sendSettings(env, chatId, messageId);
-  }
-  if (kind === "sub") {
-    const val = Number(a);
-    if (!SUB_PRESETS.includes(val)) return answer(t("toasts.unknown"));
-    const prefs = await getPrefs(env, chatId);
-    prefs.min_total_sub = val;
-    await savePrefs(env, chatId, prefs);
-    await answer(t("toasts.sub_saved", { value: String(val) }));
     return sendSettings(env, chatId, messageId);
   }
   if (kind === "board" && ["main", "sme", "both"].includes(a)) {

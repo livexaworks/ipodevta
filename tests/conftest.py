@@ -23,7 +23,7 @@ def market() -> list[dict]:
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SENT_PATH", tmp_path / "sent.json")
     monkeypatch.setattr(config, "today_ist", lambda: TODAY)
-    monkeypatch.setattr(config, "now_ist", lambda: datetime.fromisoformat(f"{TODAY}T14:31:00+05:30"))
+    monkeypatch.setattr(config, "now_ist", lambda: datetime.fromisoformat(f"{TODAY}T11:01:00+05:30"))
     # Empty values block .env from leaking real tokens into tests.
     for name in ("TELEGRAM_TOKEN", "CHANNEL_URL", "WEBHOOK_BASE_URL", "ADMIN_CHAT_ID", "IPOGURU_API_KEY"):
         monkeypatch.setenv(name, "")

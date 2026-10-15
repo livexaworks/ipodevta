@@ -1,7 +1,7 @@
 """IPO Guru Data API v2: open IPO calendar with GMP (server-side only).
 
 Free plan: 10 requests/day, 1/minute. The bot makes one GET /ipos?status=open
-per scheduled run (9:30 channel, 14:30 bot), so 2 calls on a normal day.
+per scheduled run (10:00 channel, 11:00 bot), so 2 calls on a normal day.
 Subscription by category comes from BSE (bot/sources/bse.py), not from here.
 """
 

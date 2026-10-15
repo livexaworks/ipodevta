@@ -3,13 +3,13 @@
 export default {
   "bot": {
     "name": "IPODevta",
-    "short_description": "Only the IPOs that pass your filters. Name, board, price, GMP and subscription at 2:30 PM.",
-    "description": "IPODevta sends you only the IPOs that pass your filters.\n\nEvery market day at 2:30 PM: one clean message per IPO with name, board, price, GMP and subscription. IPOs open but none worth applying? One line telling you to stay out. No IPOs open? No message.\n\nNo filters wanted? Join the channel for every open IPO at 9:30 AM.\n\nInformation only - not investment advice. Read the RHP."
+    "short_description": "Only the IPOs that pass your board and GMP % filters. Daily at 11:00 AM.",
+    "description": "IPODevta sends you only the IPOs that pass your filters.\n\nSet two things: Mainboard / SME / Both, and the minimum GMP %. Tap a preset or Type % to enter any number.\n\nEvery market day at 11:00 AM: one clean message per IPO that passes. IPOs open but none pass? One line telling you to stay out. No IPOs open? No message.\n\nNo filters wanted? Join the channel for every open IPO at 10:00 AM.\n\nInformation only - not investment advice. Read the RHP."
   },
   "commands": {
     "start": "Open IPODevta",
     "check": "IPOs passing your filters now",
-    "settings": "Set board, GMP % and subscription",
+    "settings": "Set board and GMP %",
     "help": "How it works",
     "feedback": "Send a note to the team"
   },
@@ -26,26 +26,25 @@ export default {
     "type_pct_prefixed": "Type {prefix}",
     "board_main": "Mainboard",
     "board_sme": "SME",
-    "board_both": "Both",
-    "sub_preset": "Sub {value}x"
+    "board_both": "Both"
   },
   "card": {
     "closes_today": "🔴 Closes today",
     "opens_today": "🟢 Opens today",
-    "dates": "📅 Open {open} → Close {close}",
-    "price": "💰 Price {price}",
-    "price_na": "💰 Price not announced",
-    "gmp": "📈 GMP {gmp} ({pct})",
-    "gmp_na": "📈 GMP not available",
-    "sub": "📊 Subscription {sub} ({when})",
-    "sub_na": "📊 Subscription not available yet",
-    "sub_not_started": "📊 Bidding starts today",
+    "dates": "📅 Open <b>{open}</b> → Close <b>{close}</b>",
+    "price": "💰 Price <b>{price}</b>",
+    "price_na": "💰 Price <b>not announced</b>",
+    "gmp": "📈 GMP <b>{gmp}</b> (<b>{pct}</b>)",
+    "gmp_na": "📈 GMP <b>not available</b>",
+    "sub": "📊 Subscription <b>{sub}</b> ({when})",
+    "sub_na": "📊 Subscription <b>not available yet</b>",
+    "sub_not_started": "📊 Bidding <b>starts today</b>",
     "when_morning": "till yesterday",
     "when_live": "live {time}"
   },
   "header": {
     "title": "📊 <b>IPO Market · {date}</b>",
-    "counts": "{open} open · {closing} closing today",
+    "counts": "<b>{open}</b> open · <b>{closing}</b> closing today",
     "footer": "<i>GMP and subscription as of {time} IST. GMP is unofficial. Not investment advice.</i>"
   },
   "no_match": "🚫 No IPO passed your filters today. Stay out of the IPO market today.",
@@ -60,38 +59,37 @@ export default {
     "gmp_line": "GMP         {value}",
     "main_gmp_line": "Main GMP    {value}",
     "sme_gmp_line": "SME GMP     {value}",
-    "sub_line": "Sub         {value}",
     "feedback_admin": "<b>Feedback</b> from <code>{chat_id}</code>"
   },
   "welcome": {
     "title": "<b>IPODevta</b>",
     "tagline": "<i>Only the IPOs that pass your filters.</i>",
-    "daily": "Every market day at <b>2:30 PM</b> you get one message per IPO that passes your filters: name, board, price, GMP and subscription.",
+    "daily": "Every market day at <b>11:00 AM</b> you get one message per IPO that passes your filters (board + GMP %).",
     "none": "If IPOs are open but none pass, you get one line telling you to stay out. If no IPOs are open, you get no message.",
-    "channel": "Don't want filters? <a href=\"{channel}\">The channel</a> posts every open IPO at <b>9:30 AM</b>.",
-    "buttons_hint": "Use the buttons below. No typing needed."
+    "channel": "Don't want filters? <a href=\"{channel}\">The channel</a> posts every open IPO at <b>10:00 AM</b>.",
+    "buttons_hint": "⚙️ Settings shows your filters. Tap a GMP % or <b>Type %</b> for any number."
   },
   "help": {
     "title": "<b>How IPODevta works</b>",
-    "daily": "• <b>2:30 PM</b> on market days: one message per IPO that passes your filters.",
+    "daily": "• <b>11:00 AM</b> on market days: one message per IPO that passes your filters.",
     "closing": "• 🔴 marks IPOs closing today. They come first.",
     "none": "• IPOs open but none pass: one 🚫 message. Stay out that day.\n• No IPOs open: no message.",
     "check": "• 🔎 Check now: the IPOs passing your filters right now.",
-    "settings": "• ⚙️ Settings: board, GMP % and subscription.",
-    "channel": "• <a href=\"{channel}\">📢 Channel</a>: every open IPO at <b>9:30 AM</b>, no filters."
+    "settings": "• ⚙️ Settings: choose Mainboard / SME / Both, then the minimum GMP %. Tap a preset or <b>Type %</b> for a custom number. Subscription is not a filter.",
+    "channel": "• <a href=\"{channel}\">📢 Channel</a>: every open IPO at <b>10:00 AM</b>, no filters."
   },
   "settings": {
     "title": "<b>Settings</b>",
-    "hint_main": "Mainboard GMP % is below, then subscription.",
-    "hint_sme": "SME GMP % is below, then subscription.",
-    "hint_both": "Mainboard GMP % first, then SME, then subscription.",
-    "tap_hint": "Tap a value, or tap <b>Type %</b> and send a number.",
-    "filters_use": "The 2:30 PM messages and Check now use these filters."
+    "hint_main": "Choose Mainboard GMP % below. Subscription is not used.",
+    "hint_sme": "Choose SME GMP % below. Subscription is not used.",
+    "hint_both": "Set Mainboard GMP % and SME GMP % separately. Subscription is not used.",
+    "tap_hint": "Tap a preset, or tap <b>Type %</b> and send any number from 0 to 300.",
+    "filters_use": "Your filters above drive the 11:00 AM messages and Check now."
   },
   "gmp_prompt": {
     "title_main": "<b>Mainboard GMP</b>",
     "title_sme": "<b>SME GMP</b>",
-    "body": "Send a percentage, for example <code>{example}</code>.",
+    "body": "Send any percentage you want, for example <code>{example}</code>.",
     "cancel": "Type <code>cancel</code> to stop.",
     "retry": "Send a number from 0 to 300, or <code>cancel</code>."
   },
@@ -103,7 +101,7 @@ export default {
     "thanks": "Thanks. Your note was sent to the team."
   },
   "check": {
-    "no_data": "No IPO data yet. Updates arrive at 9:30 AM and 2:30 PM on market days.",
+    "no_data": "No IPO data yet. Updates arrive at 10:00 AM and 11:00 AM on market days.",
     "none_open": "📭 No IPOs are open in the market right now.",
     "stale": "<i>Latest data: {date}, {time}.</i>"
   },
@@ -118,7 +116,6 @@ export default {
     "send_main_pct": "Send mainboard %",
     "send_sme_pct": "Send SME %",
     "gmp_saved": "{label} GMP → {value}%",
-    "sub_saved": "Min sub → {value}x",
     "board_main": "Mainboard only",
     "board_sme": "SME only",
     "board_both": "Mainboard + SME"

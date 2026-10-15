@@ -1,7 +1,7 @@
 """Entrypoint.
 
-    python -m bot.run channel            # 9:30 IST: header + one card per open IPO
-    python -m bot.run bot                # 14:30 IST: one card per passing IPO to each user
+    python -m bot.run channel            # 10:00 IST: header + one card per open IPO
+    python -m bot.run bot                # 11:00 IST: one card per passing IPO to each user
     python -m bot.run bot --dry-run      # print instead of sending, no state writes
     python -m bot.run channel --dry-run --fixture tests/fixtures/market.json
 """

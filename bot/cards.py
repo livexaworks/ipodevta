@@ -11,6 +11,11 @@ PHASE_CHANNEL = "channel"
 PHASE_BOT = "bot"
 
 
+def channel_tag() -> str:
+    """Clickable @ipodevta so forwards still point back to the channel."""
+    return f'<a href="{fmt.esc(config.channel_url())}">@ipodevta</a>'
+
+
 def _subscription_line(ipo: dict[str, Any], *, today: str, phase: str, as_of: str) -> str:
     opens_today = str(ipo.get("open_date") or "") == today
     sub = fmt.sub(ipo.get("sub_total"))
@@ -39,17 +44,23 @@ def render_card(ipo: dict[str, Any], *, today: str, phase: str, as_of: str) -> s
     gmp = fmt.rupees(ipo.get("gmp"))
     gmp_pct = fmt.pct(ipo.get("gmp_pct"))
 
+    board_line = f"<b>{board}</b> · {tag}" if tag else f"<b>{board}</b>"
     lines = [
         f"<b>{fmt.esc(fmt.display_name(str(ipo.get('name') or ipo.get('ipo_id') or '?')))}</b>",
-        f"{board} · {tag}" if tag else board,
+        "",
+        board_line,
+        "",
         copy.t(
             "card.dates",
             open=fmt.date_short(ipo.get("open_date")) or "?",
             close=fmt.date_short(ipo.get("close_date")) or "?",
         ),
+        "",
         copy.t("card.price", price=price) if price else copy.t("card.price_na"),
         copy.t("card.gmp", gmp=gmp, pct=gmp_pct) if gmp and gmp_pct else copy.t("card.gmp_na"),
         _subscription_line(ipo, today=today, phase=phase, as_of=as_of),
+        "",
+        channel_tag(),
     ]
     return "\n".join(lines)
 
@@ -58,8 +69,12 @@ def render_header(ipos: list[dict[str, Any]], *, today: str, as_of: str) -> str:
     closing = sum(1 for i in ipos if str(i.get("close_date") or "") == today)
     return "\n".join([
         copy.t("header.title", date=fmt.date_long(today)),
+        "",
         copy.t("header.counts", open=len(ipos), closing=closing),
+        "",
         copy.t("header.footer", time=fmt.time_12h(as_of)),
+        "",
+        channel_tag(),
     ])
 
 

@@ -4,7 +4,7 @@ The Cloudflare Worker does three things on the free plan:
 
 - **Telegram webhook:** Start, 🔎 Check now, ⚙️ Settings, 📢 Channel, Help and Feedback reply instantly. User filters live in KV (`prefs:<chat_id>`).
 - **Check now:** filters the latest cards that GitHub Actions stored with `POST /market` and sends one card per passing IPO, or the 🚫 no-match message.
-- **Crons (weekdays):** `0 4 * * 1-5` (9:30 IST) dispatches the `channel` run and `0 9 * * 1-5` (14:30 IST) dispatches the `bot` run to GitHub Actions. If a dispatch fails, the admin gets a Telegram message.
+- **Crons (weekdays):** `30 4 * * 1-5` (10:00 IST) dispatches the `channel` run and `30 5 * * 1-5` (11:00 IST) dispatches the `bot` run to GitHub Actions. If a dispatch fails, the admin gets a Telegram message.
 
 ## Deploy
 

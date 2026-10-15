@@ -2,8 +2,8 @@
 
 IPO GMP and subscription on Telegram, one clean message per IPO.
 
-- **Channel [@ipodevta](https://t.me/ipodevta), 9:30 AM IST.** Every open IPO, no filters. For people who don't want to set anything up.
-- **Bot, 2:30 PM IST.** Only the IPOs that pass *your* filters (board, GMP %, subscription). Each card has two buttons: 📢 Today's IPOs (opens today's channel post) and ⚙️ Filters. If IPOs are open but none pass, you get a single 🚫 message telling you to stay out that day. If no IPOs are open at all, nobody gets anything: no channel post and no DM.
+- **Channel [@ipodevta](https://t.me/ipodevta), 10:00 AM IST.** Every open IPO, no filters. For people who don't want to set anything up.
+- **Bot, 11:00 AM IST.** Only the IPOs that pass *your* filters (board, GMP %). Each card has two buttons: 📢 Today's IPOs (opens today's channel post) and ⚙️ Filters. If IPOs are open but none pass, you get a single 🚫 message telling you to stay out that day. If no IPOs are open at all, nobody gets anything: no channel post and no DM.
 
 Both use the same card:
 
@@ -23,8 +23,8 @@ Runs only on NSE trading days (`data/holidays.json`; add each year's dates when 
 ## How it runs (all free tier)
 
 ```
-Cloudflare Worker cron 9:30 IST  --repository_dispatch channel-->  GitHub Actions: python -m bot.run channel
-Cloudflare Worker cron 14:30 IST --repository_dispatch bot------>  GitHub Actions: python -m bot.run bot
+Cloudflare Worker cron 10:00 IST --repository_dispatch channel-->  GitHub Actions: python -m bot.run channel
+Cloudflare Worker cron 11:00 IST --repository_dispatch bot------>  GitHub Actions: python -m bot.run bot
 GitHub Actions --POST /market--> Worker KV  (powers the instant "Check now" button)
 Telegram --webhook--> Worker (Start, Check now, Settings, Channel, Help, Feedback)
 ```
@@ -36,7 +36,7 @@ Telegram --webhook--> Worker (Start, Check now, Settings, Channel, Help, Feedbac
 | GitHub Actions | unlimited on public repos | 2 to 4 short runs/day |
 | Cloudflare Workers + KV | 100k requests, 1k KV writes/day | tiny |
 
-GitHub's own cron is only a late fallback (09:50 / 14:50 IST). Every run is idempotent: the sent log in `data/sent.json` records each message, so a rerun only sends what is missing. Runs after 13:00 (channel) or 16:30 (bot) are skipped and the admin is told, so nobody gets stale posts.
+GitHub's own cron is only a late fallback (10:20 / 11:20 IST). Every run is idempotent: the sent log in `data/sent.json` records each message, so a rerun only sends what is missing. Runs after 13:00 (channel) or 14:00 (bot) are skipped and the admin is told, so nobody gets stale posts.
 
 `data/sent.json` never stores Telegram chat ids. Users are keyed by an HMAC of the chat id using the `EXPORT_SECRET` secret, because this repo is public. User filters live only in Cloudflare KV.
 
@@ -46,7 +46,7 @@ GitHub's own cron is only a late fallback (09:50 / 14:50 IST). Every run is idem
 bot/
   run.py          channel / bot runs, dry-run, admin report
   collect.py      IPO Guru + BSE merge, open-today filter, ordering
-  filters.py      board / GMP % / subscription pass-fail (mirrors worker.js)
+  filters.py      board / GMP % pass-fail (mirrors worker.js)
   cards.py        the one IPO card, channel header, no-match message, DM buttons
   telegram.py     paced sends (3.2 s per channel post), 429 retries, admin alerts
   state.py        per-message sent log (14-day retention)

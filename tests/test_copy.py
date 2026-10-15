@@ -14,8 +14,8 @@ COPY_JS = ROOT / "workers" / "telegram" / "copy.js"
 
 
 def test_templates_fill():
-    assert copy.t("card.price", price="₹220") == "💰 Price ₹220"
-    assert copy.t("card.sub", sub="2x", when="live 2:30 PM") == "📊 Subscription 2x (live 2:30 PM)"
+    assert copy.t("card.price", price="₹220") == "💰 Price <b>₹220</b>"
+    assert copy.t("card.sub", sub="2x", when="live 2:30 PM") == "📊 Subscription <b>2x</b> (live 2:30 PM)"
 
 
 def test_worker_copy_js_matches_shared():
@@ -36,16 +36,15 @@ def test_worker_and_python_defaults_match():
     from bot import config
 
     src = WORKER.read_text(encoding="utf-8")
-    m = re.search(r"const DEFAULTS = \{ board: \"(\w+)\", min_gmp_main: (\d+), min_gmp_sme: (\d+), min_total_sub: (\d+) \}", src)
+    m = re.search(r"const DEFAULTS = \{ board: \"(\w+)\", min_gmp_main: (\d+), min_gmp_sme: (\d+) \}", src)
     assert m, "DEFAULTS line changed shape"
     assert m.group(1) == config.DEFAULT_BOARD
     assert float(m.group(2)) == config.MIN_GMP_MAIN
     assert float(m.group(3)) == config.MIN_GMP_SME
-    assert float(m.group(4)) == config.MIN_TOTAL_SUB
 
 
 def test_worker_crons_match_wrangler():
     toml = (ROOT / "workers" / "telegram" / "wrangler.toml").read_text(encoding="utf-8")
     src = WORKER.read_text(encoding="utf-8")
-    for cron in ("0 4 * * 1-5", "0 9 * * 1-5"):
+    for cron in ("30 4 * * 1-5", "30 5 * * 1-5"):
         assert f'"{cron}"' in toml and f'"{cron}"' in src

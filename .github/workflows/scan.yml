@@ -1,14 +1,14 @@
 name: IPO scan
 on:
-  # Primary trigger: the Cloudflare Worker cron dispatches `channel` at 9:30 IST
-  # and `bot` at 14:30 IST (GitHub's own cron runs late, often by an hour or more).
+  # Primary trigger: the Cloudflare Worker cron dispatches `channel` at 10:00 IST
+  # and `bot` at 11:00 IST (GitHub's own cron runs late, often by an hour or more).
   repository_dispatch:
     types: [channel, bot]
   # Fallback only. Runs are idempotent and skip once today's run is done;
-  # past the deadline (13:00 channel / 16:30 bot) they alert the admin instead.
+  # past the deadline (13:00 channel / 14:00 bot) they alert the admin instead.
   schedule:
-    - cron: "20 4 * * 1-5"   # 09:50 IST -> channel
-    - cron: "20 9 * * 1-5"   # 14:50 IST -> bot
+    - cron: "50 4 * * 1-5"   # 10:20 IST -> channel
+    - cron: "50 5 * * 1-5"   # 11:20 IST -> bot
   workflow_dispatch:
     inputs:
       mode:
@@ -58,7 +58,7 @@ jobs:
               [ "${{ inputs.force }}" = "true" ] && flags="$flags --force"
               ;;
             schedule)
-              if [ "${{ github.event.schedule }}" = "20 4 * * 1-5" ]; then mode=channel; else mode=bot; fi ;;
+              if [ "${{ github.event.schedule }}" = "50 4 * * 1-5" ]; then mode=channel; else mode=bot; fi ;;
           esac
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "flags=$flags" >> "$GITHUB_OUTPUT"

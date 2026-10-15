@@ -15,7 +15,8 @@ log = logging.getLogger(__name__)
 API = "https://api.telegram.org/bot{token}/{method}"
 
 # Telegram allows ~20 msgs/min into one group/channel and ~1 msg/s into one private chat.
-CHANNEL_INTERVAL_SEC = 3.2
+# 5.5s keeps the channel under that cap and leaves a calmer gap between IPO cards.
+CHANNEL_INTERVAL_SEC = 5.5
 PRIVATE_INTERVAL_SEC = 1.0
 GLOBAL_INTERVAL_SEC = 0.05
 

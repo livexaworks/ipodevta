@@ -42,13 +42,12 @@ BSE_CATDEM_NEW = (
 
 # Default filters for users who have not customised (mirrors worker.js DEFAULTS).
 DEFAULT_BOARD = "main"
-MIN_GMP_MAIN = 34.0
+MIN_GMP_MAIN = 24.0
 MIN_GMP_SME = 48.0
-MIN_TOTAL_SUB = 1.0
 
 # Daily schedule (IST). Runs after the deadline skip and alert the admin.
 CHANNEL_DEADLINE = "13:00"
-BOT_DEADLINE = "16:30"
+BOT_DEADLINE = "14:00"
 
 RETENTION_DAYS = 14
 
