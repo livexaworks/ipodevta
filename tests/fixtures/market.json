@@ -3,6 +3,7 @@
     "ipo_id": "vishal-nirmiti-ipo",
     "name": "Vishal Nirmiti",
     "board": "MAIN",
+    "price_low": 210.0,
     "price_high": 220.0,
     "open_date": "2026-10-06",
     "close_date": "2026-10-08",

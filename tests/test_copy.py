@@ -14,8 +14,9 @@ COPY_JS = ROOT / "workers" / "telegram" / "copy.js"
 
 
 def test_templates_fill():
-    assert copy.t("card.price", price="₹220") == "💰 Price <b>₹220</b>"
-    assert copy.t("card.sub", sub="2x", when="live 2:30 PM") == "📊 Subscription <b>2x</b> (live 2:30 PM)"
+    assert copy.t("card.price", price="₹220") == "💰 Price: ₹220"
+    assert copy.t("card.sub", sub="2x", when="live 2:30 PM") == "📊 Subscription (live 2:30 PM): 2x"
+    assert copy.t("card.footer_bot_filter") == "⚙️ Change filter: /filter"
 
 
 def test_worker_copy_js_matches_shared():

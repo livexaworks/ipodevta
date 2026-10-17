@@ -15,7 +15,11 @@ HOLIDAYS_PATH = DATA_DIR / "holidays.json"
 IST = timezone(timedelta(hours=5, minutes=30))
 
 REPO_URL = "https://github.com/livexaworks/ipodevta"
-USER_AGENT = f"IPODevtaBot/2.0 (+{REPO_URL})"
+USER_AGENT = f"IPOGmpAlertsBot/2.0 (+{REPO_URL})"
+
+# Public Telegram handles (SEO identity). CHANNEL_ID may still be numeric.
+DEFAULT_CHANNEL_USERNAME = "ipogmpalerts"
+DEFAULT_BOT_USERNAME = "ipogmpalertsbot"
 
 # BSE public bookbuilding APIs (category subscription only).
 BSE_HEADERS = {
@@ -77,8 +81,26 @@ def telegram_token() -> str:
     return env("TELEGRAM_TOKEN")
 
 
+def channel_username() -> str:
+    raw = env("CHANNEL_USERNAME", DEFAULT_CHANNEL_USERNAME).lstrip("@")
+    return raw or DEFAULT_CHANNEL_USERNAME
+
+
+def bot_username() -> str:
+    raw = env("BOT_USERNAME", DEFAULT_BOT_USERNAME).lstrip("@")
+    return raw or DEFAULT_BOT_USERNAME
+
+
+def channel_mention() -> str:
+    return f"@{channel_username()}"
+
+
+def bot_mention() -> str:
+    return f"@{bot_username()}"
+
+
 def channel_id() -> str:
-    return env("CHANNEL_ID", "@ipodevta")
+    return env("CHANNEL_ID", f"@{DEFAULT_CHANNEL_USERNAME}")
 
 
 def channel_url() -> str:
@@ -89,7 +111,7 @@ def channel_url() -> str:
     cid = channel_id()
     if cid.startswith("@"):
         return f"https://t.me/{cid[1:]}"
-    return "https://t.me/ipodevta"
+    return f"https://t.me/{channel_username()}"
 
 
 def admin_chat_id() -> str:

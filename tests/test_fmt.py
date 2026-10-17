@@ -42,6 +42,14 @@ def test_dates_and_time():
     assert fmt.date_short("2026-09-30") == "30 Sep"
     assert fmt.date_short(None) is None
     assert fmt.date_long("2026-10-08") == "Thu 8 Oct"
+    assert fmt.date_full("2026-10-08") == "8 Oct 2026"
+    assert fmt.date_full(None) is None
     assert fmt.time_12h("14:30") == "2:30 PM"
     assert fmt.time_12h("09:05") == "9:05 AM"
     assert fmt.time_12h("12:00") == "12:00 PM"
+
+
+def test_sum_rupees():
+    assert fmt.sum_rupees(220, 80) == "₹300"
+    assert fmt.sum_rupees(220, None) is None
+    assert fmt.sum_rupees(None, 80) is None

@@ -81,7 +81,7 @@ class Report:
                 f"{self.open_ipos} open IPOs, {self.users} users, {self.posted} cards, "
                 f"{self.no_match} no-match, {self.blocked} blocked"
             )
-        return f"IPODevta {self.mode}: {body}, {self.failed} failed"
+        return f"IPO GMP Alerts {self.mode}: {body}, {self.failed} failed"
 
 
 def run_channel(
@@ -173,7 +173,8 @@ def market_payload(
                 "board": i.get("board"),
                 "gmp_pct": i.get("gmp_pct"),
                 "sub_total": i.get("sub_total"),
-                "card": cards.render_card(i, today=today, phase=phase, as_of=as_of),
+                # Always bot-phase so Check now never shows the channel footer.
+                "card": cards.render_card(i, today=today, phase=cards.PHASE_BOT, as_of=as_of),
             }
             for i in ipos
         ],
@@ -213,7 +214,7 @@ def run(
         log.info("%s run already completed for %s", mode, today)
         return 0
     if not force and as_of > deadline:
-        msg = f"IPODevta {mode}: run started at {as_of} IST, after the {deadline} cutoff. Skipped to avoid stale posts."
+        msg = f"IPO GMP Alerts {mode}: run started at {as_of} IST, after the {deadline} cutoff. Skipped to avoid stale posts."
         log.warning(msg)
         if not dry_run:
             telegram.admin(msg)
@@ -224,7 +225,7 @@ def run(
     except CollectError as exc:
         log.error("%s", exc)
         if not dry_run:
-            telegram.admin(f"IPODevta {mode} aborted, nothing sent: {exc}")
+            telegram.admin(f"IPO GMP Alerts {mode} aborted, nothing sent: {exc}")
         return 1
     ipos = collected.ipos
 
@@ -255,7 +256,7 @@ def run(
         except worker_api.WorkerError as exc:
             log.error("%s", exc)
             if not dry_run:
-                telegram.admin(f"IPODevta bot aborted, no DMs sent: {exc}")
+                telegram.admin(f"IPO GMP Alerts bot aborted, no DMs sent: {exc}")
             return 1
         if only_chat:
             users = {only_chat: users.get(only_chat, {})}
@@ -280,7 +281,7 @@ def run(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="IPODevta daily runs")
+    parser = argparse.ArgumentParser(description="IPO GMP Alerts daily runs")
     parser.add_argument("mode", choices=MODES)
     parser.add_argument("--dry-run", action="store_true", help="print messages, send nothing, write no state")
     parser.add_argument("--force", action="store_true", help="ignore market-day, deadline and already-done checks")
@@ -307,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
         tb = traceback.format_exc()
         log.error("Unhandled: %s\n%s", exc, tb)
         if not args.dry_run:
-            telegram.admin(f"IPODevta {args.mode} crashed:\n{exc}\n\n{tb[-3000:]}")
+            telegram.admin(f"IPO GMP Alerts {args.mode} crashed:\n{exc}\n\n{tb[-3000:]}")
         return 1
 
 

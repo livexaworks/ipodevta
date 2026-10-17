@@ -1,7 +1,7 @@
 /**
- * IPODevta - Telegram webhook + schedule trigger (Cloudflare Worker, free plan).
+ * IPO GMP Alerts - Telegram webhook + schedule trigger (Cloudflare Worker, free plan).
  *
- * - Webhook: Start, Check now, Settings, Channel, Help, Feedback (instant replies).
+ * - Webhook: Start, Check now, Settings/filter, Channel, Help, Feedback (instant replies).
  * - Check now: filters the latest cards that GitHub Actions pushed to KV (POST /market).
  * - Cron: 10:00 IST dispatches the `channel` run, 11:00 IST dispatches the `bot` run.
  *
@@ -43,8 +43,9 @@ function esc(s) {
 
 function channelUrl(env) {
   if (env.CHANNEL_URL) return env.CHANNEL_URL.replace(/\/$/, "");
-  const cid = (env.CHANNEL_ID || "@ipodevta").trim();
-  return cid.startsWith("@") ? `https://t.me/${cid.slice(1)}` : "https://t.me/ipodevta";
+  const username = String(env.CHANNEL_USERNAME || "ipogmpalerts").replace(/^@/, "");
+  const cid = (env.CHANNEL_ID || `@${username}`).trim();
+  return cid.startsWith("@") ? `https://t.me/${cid.slice(1)}` : `https://t.me/${username}`;
 }
 
 function todayIst() {
@@ -138,6 +139,7 @@ function welcomeText(p, env) {
     w.none,
     "",
     t("welcome.channel", { channel: channelUrl(env) }),
+    w.full_list,
     "",
     prefsBlock(p),
     "",
@@ -427,7 +429,7 @@ async function handleText(env, chatId, text) {
   const cmd = raw.split(/\s+/)[0].toLowerCase().split("@")[0].replace(/^\//, "");
   if (["start", "menu"].includes(cmd)) return sendHome(env, chatId);
   if (["check", "preview"].includes(cmd)) return sendCheck(env, chatId);
-  if (["settings", "filters", "status"].includes(cmd)) return sendSettings(env, chatId);
+  if (["settings", "filter", "filters", "status"].includes(cmd)) return sendSettings(env, chatId);
   if (cmd === "channel") return sendChannel(env, chatId);
   if (cmd === "help") return sendHelp(env, chatId);
   if (cmd === "feedback") return beginFeedback(env, chatId);
@@ -502,7 +504,7 @@ async function dispatch(env, eventType) {
       authorization: `Bearer ${env.GITHUB_TOKEN}`,
       accept: "application/vnd.github+json",
       "content-type": "application/json",
-      "user-agent": "ipodevta-worker",
+      "user-agent": "ipo-gmp-alerts-worker",
     },
     body: JSON.stringify({ event_type: eventType, client_payload: { source: "worker-cron" } }),
   });

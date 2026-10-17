@@ -1,20 +1,11 @@
-# IPODevta
+# IPO GMP Alerts
 
 IPO GMP and subscription on Telegram, one clean message per IPO.
 
-- **Channel [@ipodevta](https://t.me/ipodevta), 10:00 AM IST.** Every open IPO, no filters. For people who don't want to set anything up.
-- **Bot, 11:00 AM IST.** Only the IPOs that pass *your* filters (board, GMP %). Each card has two buttons: 📢 Today's IPOs (opens today's channel post) and ⚙️ Filters. If IPOs are open but none pass, you get a single 🚫 message telling you to stay out that day. If no IPOs are open at all, nobody gets anything: no channel post and no DM.
+- **Channel [@ipogmpalerts](https://t.me/ipogmpalerts), 10:00 AM IST.** Every open IPO, no filters. For people who don't want to set anything up.
+- **Bot [@ipogmpalertsbot](https://t.me/ipogmpalertsbot), 11:00 AM IST.** Only the IPOs that pass *your* filters (board, GMP %). Each card has two buttons: 📢 Today's IPOs (opens today's channel post) and ⚙️ Filters. If IPOs are open but none pass, you get a single 🚫 message telling you to stay out that day. If no IPOs are open at all, nobody gets anything: no channel post and no DM.
 
-Both use the same card:
-
-```
-Vishal Nirmiti
-Mainboard · 🔴 Closes today
-📅 Open 6 Oct → Close 8 Oct
-💰 Price ₹220
-📈 GMP ₹80 (+36.4%)
-📊 Subscription 2.4x (live 2:30 PM)
-```
+Both use the same SEO card (company name first, hashtags, plain searchable text).
 
 Runs only on NSE trading days (`data/holidays.json`; add each year's dates when NSE publishes them in December, and the admin summary warns if the current year is missing). Information only, not investment advice. GMP is unofficial grey-market data.
 
@@ -26,7 +17,7 @@ Runs only on NSE trading days (`data/holidays.json`; add each year's dates when 
 Cloudflare Worker cron 10:00 IST --repository_dispatch channel-->  GitHub Actions: python -m bot.run channel
 Cloudflare Worker cron 11:00 IST --repository_dispatch bot------>  GitHub Actions: python -m bot.run bot
 GitHub Actions --POST /market--> Worker KV  (powers the instant "Check now" button)
-Telegram --webhook--> Worker (Start, Check now, Settings, Channel, Help, Feedback)
+Telegram --webhook--> Worker (Start, Check now, Settings/filter, Channel, Help, Feedback)
 ```
 
 | Piece | Free limit | Usage |
@@ -48,21 +39,26 @@ bot/
   collect.py      IPO Guru + BSE merge, open-today filter, ordering
   filters.py      board / GMP % pass-fail (mirrors worker.js)
   cards.py        the one IPO card, channel header, no-match message, DM buttons
-  telegram.py     paced sends (3.2 s per channel post), 429 retries, admin alerts
+  hashtags.py     company + board SEO hashtags
+  telegram.py     paced sends, 429 retries, admin alerts
   state.py        per-message sent log (14-day retention)
   worker_api.py   read users from / push market cards to the Worker
   set_webhook.py  one-time webhook + bot profile setup
+  profile.py      setMy* / getMy* profile helpers
   sources/        ipoguru.py, bse.py
+scripts/
+  setup_bot_profile.py   apply + verify bot name/descriptions/commands
 shared/copy.json  every user-facing string (Python and Worker)
 workers/telegram/ Cloudflare Worker (webhook, Check now, crons)
 ```
 
 ## Run your own
 
-1. Copy `.env.example` to `.env` and fill it in.
+1. Copy `.env.example` to `.env` and fill it in (`CHANNEL_ID=@ipogmpalerts`, etc.).
 2. Add the same values as GitHub Actions secrets: `TELEGRAM_TOKEN`, `CHANNEL_ID`, `ADMIN_CHAT_ID`, `WEBHOOK_BASE_URL`, `EXPORT_SECRET`, `IPOGURU_API_KEY`.
-3. Deploy the Worker: see [workers/telegram/README.md](workers/telegram/README.md).
+3. Deploy the Worker: see [workers/telegram/README.md](workers/telegram/README.md). Also set `CHANNEL_ID` on the Worker with wrangler (separate from GitHub secrets).
 4. `pip install -r requirements-dev.txt && python -m pytest` (CI runs the same on every push)
+5. Optional: `python scripts/setup_bot_profile.py` to push Bot API name/descriptions/commands from `shared/copy.json`.
 
 ```bash
 python -m bot.run channel --dry-run --force --fixture tests/fixtures/market.json   # offline preview
@@ -71,3 +67,12 @@ python -m bot.run channel                                                       
 ```
 
 Edit copy in `shared/copy.json`, then run `python workers/telegram/sync_copy.py` before deploying the Worker.
+
+## Production checks
+
+```bash
+python scripts/check_prod.py          # env, profile, webhook, Worker /health, /help smoke
+python scripts/setup_bot_profile.py   # re-apply Bot API name/descriptions/commands
+```
+
+Live Worker: https://ipogmpalerts.livexaworks.workers.dev · Channel: [@ipogmpalerts](https://t.me/ipogmpalerts) · Bot: [@ipogmpalertsbot](https://t.me/ipogmpalertsbot)

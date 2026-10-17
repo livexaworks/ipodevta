@@ -27,6 +27,8 @@ def isolated(tmp_path, monkeypatch):
     # Empty values block .env from leaking real tokens into tests.
     for name in ("TELEGRAM_TOKEN", "CHANNEL_URL", "WEBHOOK_BASE_URL", "ADMIN_CHAT_ID", "IPOGURU_API_KEY"):
         monkeypatch.setenv(name, "")
-    monkeypatch.setenv("CHANNEL_ID", "@ipodevta")
+    monkeypatch.setenv("CHANNEL_ID", "@ipogmpalerts")
+    monkeypatch.setenv("CHANNEL_USERNAME", "ipogmpalerts")
+    monkeypatch.setenv("BOT_USERNAME", "ipogmpalertsbot")
     monkeypatch.setenv("EXPORT_SECRET", "test-secret")
     return tmp_path

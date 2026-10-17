@@ -1,14 +1,14 @@
 {
   "bot": {
-    "name": "IPODevta",
-    "short_description": "Only the IPOs that pass your board and GMP % filters. Daily at 11:00 AM.",
-    "description": "IPODevta sends you only the IPOs that pass your filters.\n\nSet two things: Mainboard / SME / Both, and the minimum GMP %. Tap a preset or Type % to enter any number.\n\nEvery market day at 11:00 AM: one clean message per IPO that passes. IPOs open but none pass? One line telling you to stay out. No IPOs open? No message.\n\nNo filters wanted? Join the channel for every open IPO at 10:00 AM.\n\nInformation only - not investment advice. Read the RHP."
+    "name": "IPO GMP Alerts Bot: Custom GMP Filter",
+    "short_description": "Get IPO GMP alerts filtered your way: Mainboard or SME, above your GMP %. Daily list: @ipogmpalerts",
+    "description": "Tired of scrolling through every IPO? Set your filter once and get only the IPOs that match.\n\n✅ Pick Mainboard, SME or both\n✅ Set your minimum GMP\n✅ Get GMP + subscription status every market day at 11:00 AM\n\nFree, no signup.\n📢 Full daily list: @ipogmpalerts\n\nGMP is unofficial grey market data. Not investment advice."
   },
   "commands": {
-    "start": "Open IPODevta",
-    "check": "IPOs passing your filters now",
-    "settings": "Set board and GMP %",
-    "help": "How it works",
+    "start": "Set up your IPO GMP filter",
+    "check": "IPOs passing your filter right now",
+    "filter": "Change board (Mainboard/SME) or GMP threshold",
+    "help": "How this bot works",
     "feedback": "Send a note to the team"
   },
   "buttons": {
@@ -27,23 +27,34 @@
     "board_both": "Both"
   },
   "card": {
+    "line1_gmp": "<b>📈 {company} IPO GMP Today: {gmp} ({pct})</b>",
+    "line1": "<b>📈 {company} IPO</b>",
+    "line2": "🏷 {board} IPO | {date}",
+    "line2_marker": "🏷 {board} IPO | {date} | {marker}",
     "closes_today": "🔴 Closes today",
     "opens_today": "🟢 Opens today",
-    "dates": "📅 Open <b>{open}</b> → Close <b>{close}</b>",
-    "price": "💰 Price <b>{price}</b>",
-    "price_na": "💰 Price <b>not announced</b>",
-    "gmp": "📈 GMP <b>{gmp}</b> (<b>{pct}</b>)",
-    "gmp_na": "📈 GMP <b>not available</b>",
-    "sub": "📊 Subscription <b>{sub}</b> ({when})",
-    "sub_na": "📊 Subscription <b>not available yet</b>",
-    "sub_not_started": "📊 Bidding <b>starts today</b>",
+    "price_band": "💰 Price band: {low}-{high}",
+    "price": "💰 Price: {price}",
+    "est_listing": "🎯 Est. listing: {price}",
+    "sub": "📊 Subscription ({when}): {sub}",
+    "sub_not_started": "📊 Bidding starts today",
     "when_morning": "till yesterday",
-    "when_live": "live {time}"
+    "when_live": "live {time}",
+    "cat_qib": "QIB {value}",
+    "cat_nii": "NII {value}",
+    "cat_retail": "Retail {value}",
+    "date_open": "Open {date}",
+    "date_close": "Close {date}",
+    "footer_channel_bot": "🔔 Custom GMP alerts: {bot}",
+    "footer_channel_join": "📢 Join: {channel} | GMP is unofficial, not advice",
+    "footer_bot_list": "📢 Full daily list: {channel}",
+    "footer_bot_filter": "⚙️ Change filter: /filter"
   },
   "header": {
-    "title": "📊 <b>IPO Market · {date}</b>",
+    "title": "📊 <b>IPO GMP Today · {date}</b>",
     "counts": "<b>{open}</b> open · <b>{closing}</b> closing today",
-    "footer": "<i>GMP and subscription as of {time} IST. GMP is unofficial. Not investment advice.</i>"
+    "footer": "<i>GMP and subscription as of {time} IST. GMP is unofficial. Not investment advice.</i>",
+    "hashtags": "#IPOGMP #GMPToday"
   },
   "no_match": "🚫 No IPO passed your filters today. Stay out of the IPO market today.",
   "disclaimer": "Grey-market premium is unofficial and can move quickly. Data from IPO Guru and BSE. Information only - not investment advice. Read the RHP.",
@@ -60,20 +71,21 @@
     "feedback_admin": "<b>Feedback</b> from <code>{chat_id}</code>"
   },
   "welcome": {
-    "title": "<b>IPODevta</b>",
+    "title": "<b>IPO GMP Alerts</b>",
     "tagline": "<i>Only the IPOs that pass your filters.</i>",
     "daily": "Every market day at <b>11:00 AM</b> you get one message per IPO that passes your filters (board + GMP %).",
     "none": "If IPOs are open but none pass, you get one line telling you to stay out. If no IPOs are open, you get no message.",
     "channel": "Don't want filters? <a href=\"{channel}\">The channel</a> posts every open IPO at <b>10:00 AM</b>.",
+    "full_list": "📢 Full daily list of all IPOs: @ipogmpalerts",
     "buttons_hint": "⚙️ Settings shows your filters. Tap a GMP % or <b>Type %</b> for any number."
   },
   "help": {
-    "title": "<b>How IPODevta works</b>",
+    "title": "<b>How IPO GMP Alerts works</b>",
     "daily": "• <b>11:00 AM</b> on market days: one message per IPO that passes your filters.",
     "closing": "• 🔴 marks IPOs closing today. They come first.",
     "none": "• IPOs open but none pass: one 🚫 message. Stay out that day.\n• No IPOs open: no message.",
     "check": "• 🔎 Check now: the IPOs passing your filters right now.",
-    "settings": "• ⚙️ Settings: choose Mainboard / SME / Both, then the minimum GMP %. Tap a preset or <b>Type %</b> for a custom number. Subscription is not a filter.",
+    "settings": "• ⚙️ Settings or /filter: choose Mainboard / SME / Both, then the minimum GMP %. Tap a preset or <b>Type %</b> for a custom number. Subscription is not a filter.",
     "channel": "• <a href=\"{channel}\">📢 Channel</a>: every open IPO at <b>10:00 AM</b>, no filters."
   },
   "settings": {
@@ -123,6 +135,6 @@
     "use_buttons": "Use the buttons below."
   },
   "admin": {
-    "dispatch_failed": "IPODevta: cron {event} dispatch to GitHub failed (HTTP {status}). Check GITHUB_TOKEN / GITHUB_REPO on the Worker."
+    "dispatch_failed": "IPO GMP Alerts: cron {event} dispatch to GitHub failed (HTTP {status}). Check GITHUB_TOKEN / GITHUB_REPO on the Worker."
   }
 }

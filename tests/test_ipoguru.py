@@ -30,6 +30,7 @@ def test_normalize_mainboard():
     assert row["ipo_id"] == "example-industries-ipo"
     assert row["name"] == "Example Industries"
     assert row["board"] == "MAIN"
+    assert row["price_low"] == 140.0
     assert row["price_high"] == 148.0
     assert (row["gmp"], row["gmp_pct"]) == (35.0, 23.65)
     assert row["sub_total"] == 1.25

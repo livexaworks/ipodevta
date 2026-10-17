@@ -17,15 +17,21 @@ def open_ipos(market):
 def test_channel_posts_header_then_one_card_per_ipo(open_ipos):
     sender = run.DryRunSender()
     report = run.run_channel(
-        open_ipos, today=TODAY, as_of="10:00", sent=state.SentLog(TODAY), sender=sender, channel="@ipodevta"
+        open_ipos,
+        today=TODAY,
+        as_of="10:00",
+        sent=state.SentLog(TODAY),
+        sender=sender,
+        channel="@ipogmpalerts",
     )
     texts = [m["text"] for m in sender.sent]
     assert len(texts) == 1 + len(open_ipos) == report.posted
-    assert texts[0].startswith("📊 <b>IPO Market")
-    assert texts[1].startswith("<b>Vishal Nirmiti</b>")  # closing today leads
-    assert all(m["reply_markup"] is None for m in sender.sent)  # channel cards carry no buttons
-    assert all(t.endswith("@ipodevta</a>") for t in texts)  # forward attribution on every post
-    assert len({t.splitlines()[0] for t in texts[1:]}) == len(open_ipos)  # one IPO name per message
+    assert texts[0].startswith("📊 <b>IPO GMP Today")
+    assert "Vishal Nirmiti" in texts[1].splitlines()[0]  # closing today leads
+    assert all(m["reply_markup"] is None for m in sender.sent)
+    assert all("@ipogmpalerts" in t for t in texts)
+    assert all("@ipogmpalertsbot" in t for t in texts[1:])
+    assert len({t.splitlines()[0] for t in texts[1:]}) == len(open_ipos)
 
 
 def test_channel_rerun_sends_nothing_twice(open_ipos):
@@ -43,12 +49,13 @@ def test_bot_sends_only_passing_cards_each_with_buttons(open_ipos):
     sender = run.DryRunSender()
     report = run.run_bot(open_ipos, users, today=TODAY, as_of="14:31", sent=log, sender=sender)
 
-    assert [m["text"].splitlines()[0] for m in sender.sent] == ["<b>Vishal Nirmiti</b>"]
+    assert "Vishal Nirmiti" in sender.sent[0]["text"].splitlines()[0]
     assert report.posted == 1 and report.no_match == 0
     for m in sender.sent:
         row = m["reply_markup"]["inline_keyboard"][0]
-        assert row[0]["url"] == "https://t.me/ipodevta/77"
+        assert row[0]["url"] == "https://t.me/ipogmpalerts/77"
         assert row[1]["callback_data"] == "settings"
+        assert "⚙️ Change filter: /filter" in m["text"]
     assert "passed your filters" not in "".join(m["text"] for m in sender.sent)
 
 
@@ -83,7 +90,7 @@ def test_empty_market_sends_nothing_anywhere():
     report = run.run_bot([], {"1": {}, "2": strict}, today=TODAY, as_of="14:31", sent=log, sender=dm)
     assert channel.sent == [] and dm.sent == []
     assert report.no_match == 0
-    assert report.line().startswith("IPODevta bot: no open IPOs, nothing sent")
+    assert report.line().startswith("IPO GMP Alerts bot: no open IPOs, nothing sent")
 
 
 def test_empty_market_run_completes(monkeypatch, tmp_path):
@@ -105,12 +112,18 @@ def test_blocked_user_does_not_fail_the_run(open_ipos):
     assert report.blocked == 1 and report.failed == 0
 
 
-def test_card_text_identical_across_channel_dm_and_worker_payload(open_ipos):
+def test_market_payload_always_uses_bot_footer(open_ipos):
+    """Check now must never show the channel footer, even after a channel run."""
     channel = run.DryRunSender()
     run.run_channel(open_ipos, today=TODAY, as_of="10:00", sent=state.SentLog(TODAY), sender=channel, channel="@c")
     payload = run.market_payload(open_ipos, today=TODAY, as_of="10:00", phase="channel", header_id=1)
-    assert [m["text"] for m in channel.sent[1:]] == [i["card"] for i in payload["ipos"]]
+    channel_cards = [m["text"] for m in channel.sent[1:]]
+    assert all("Custom GMP alerts" in t for t in channel_cards)
+    assert all("Change filter: /filter" in i["card"] for i in payload["ipos"])
+    assert all("Custom GMP alerts" not in i["card"] for i in payload["ipos"])
 
+
+def test_bot_dm_matches_payload_cards(open_ipos):
     dm = run.DryRunSender()
     lenient = {"board": "both", "min_gmp_main": 0, "min_gmp_sme": 0}
     run.run_bot(open_ipos, {"1": lenient}, today=TODAY, as_of="14:31", sent=state.SentLog("2026-10-08"), sender=dm)
@@ -126,13 +139,14 @@ def test_run_bot_end_to_end_marks_done(monkeypatch, capsys):
     assert log.done("bot")
     assert log.dm_sent("1") == ["vishal-nirmiti-ipo"]
     assert log.dm_sent("2") == [state.NO_MATCH]
-    # second run is a no-op
     assert run.run("bot", fixture=FIXTURE) == 0
 
 
 def test_dry_run_prints_and_writes_no_state(capsys):
     assert run.run("channel", dry_run=True, force=True, fixture=FIXTURE) == 0
-    assert "<b>Vishal Nirmiti</b>" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Vishal Nirmiti" in out
+    assert "@ipogmpalerts" in out
     assert not config.SENT_PATH.exists()
 
 

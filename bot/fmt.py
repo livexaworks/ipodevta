@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 
 # Tokens kept ALL CAPS after .title() normalisation (e.g. "FX Parts").
-NAME_CASE_EXCEPTIONS = frozenset({"FX", "NSE", "BSE", "SME", "IPO", "QIB", "NII", "AI", "IT"})
+NAME_CASE_EXCEPTIONS = frozenset({"FX", "NSE", "BSE", "SME", "IPO", "QIB", "NII", "AI", "IT", "HD", "GMP"})
 _SUFFIXES = ("limited", "ltd", "llp")
 
 
@@ -54,6 +54,14 @@ def rupees(val: Any) -> str | None:
     return f"{sign}₹{body}"
 
 
+def sum_rupees(a: Any, b: Any) -> str | None:
+    """₹{a+b} when both values are finite numbers."""
+    na, nb = _num(a), _num(b)
+    if na is None or nb is None:
+        return None
+    return rupees(na + nb)
+
+
 def pct(val: Any) -> str | None:
     """Signed one-decimal percent: +9.1% / -2.5% / 0%."""
     n = _num(val)
@@ -90,6 +98,17 @@ def date_long(date_iso: str) -> str:
     """'Thu 8 Oct'."""
     d = datetime.strptime(date_iso[:10], "%Y-%m-%d")
     return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
+
+
+def date_full(date_iso: str | None) -> str | None:
+    """'8 Oct 2026'."""
+    if not date_iso:
+        return None
+    try:
+        d = datetime.strptime(str(date_iso)[:10], "%Y-%m-%d")
+    except ValueError:
+        return None
+    return f"{d.day} {d.strftime('%b')} {d.year}"
 
 
 def time_12h(hhmm: str) -> str:

@@ -86,10 +86,13 @@ def normalize_row(row: dict[str, Any]) -> dict[str, Any] | None:
     if gmp_pct is None and gmp_val is not None and price_high:
         gmp_pct = round(gmp_val / price_high * 100, 2)
 
+    price_low = _parse_number(row.get("price_min"))
+
     return {
         "ipo_id": slug,
         "name": (row.get("display_name") or row.get("name") or slug).strip(),
         "board": board,
+        "price_low": price_low,
         "price_high": price_high,
         "open_date": row.get("open_date"),
         "close_date": row.get("close_date"),
