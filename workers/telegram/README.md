@@ -17,7 +17,7 @@ npx wrangler secret put ADMIN_CHAT_ID
 npx wrangler secret put WEBHOOK_SECRET
 npx wrangler secret put EXPORT_SECRET       # same value as the GitHub secret
 npx wrangler secret put GITHUB_TOKEN        # fine-grained PAT, this repo, Contents: read & write
-npx wrangler secret put GITHUB_REPO         # livexaworks/ipodevta
+npx wrangler secret put GITHUB_REPO         # livexaworks/ipogmpalerts
 npx wrangler secret put TELEGRAM_TOKEN
 npx wrangler deploy
 ```

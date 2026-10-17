@@ -14,7 +14,7 @@ HOLIDAYS_PATH = DATA_DIR / "holidays.json"
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-REPO_URL = "https://github.com/livexaworks/ipodevta"
+REPO_URL = "https://github.com/livexaworks/ipogmpalerts"
 USER_AGENT = f"IPOGmpAlertsBot/2.0 (+{REPO_URL})"
 
 # Public Telegram handles (SEO identity). CHANNEL_ID may still be numeric.
